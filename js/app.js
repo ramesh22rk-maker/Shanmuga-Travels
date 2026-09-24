@@ -208,10 +208,9 @@ class TravelsApp {
           return;
         }
 
-        const routeInfo = ROUTE_DATABASE.calculateRoute(fromPlace, toPlace);
         const startOdo = parseFloat(formData.get('startOdo')) || 0;
         const costCustomer = parseFloat(formData.get('costCustomer')) || 0;
-        const fastagToll = parseFloat(formData.get('fastagToll')) || routeInfo.autoToll;
+        const fastagToll = parseFloat(formData.get('fastagToll')) || 0;
         const fuelExpense = parseFloat(formData.get('fuelExpense')) || 0;
         const otherExpense = parseFloat(formData.get('otherExpense')) || 0;
         const otherNote = formData.get('otherNote') || '';
@@ -224,7 +223,7 @@ class TravelsApp {
           customerName: formData.get('customerName') || '',
           fromPlace: fromPlace,
           toPlace: toPlace,
-          distanceKm: routeInfo.distanceKm,
+          distanceKm: 0,
           startOdo: startOdo,
           startOdoPhoto: this.tempStartPhoto || '',
           endOdo: 0,
@@ -241,6 +240,7 @@ class TravelsApp {
 
         startForm.reset();
         this.tempStartPhoto = '';
+        const startPreview = document.getElementById('startOdoPreview');
         if (startPreview) startPreview.style.display = 'none';
 
         this.setDefaultDateTime();
@@ -440,6 +440,11 @@ class TravelsApp {
             ${t.customerName ? ` | <i class="far fa-user"></i> ${t.customerName}` : ''}
           </div>
 
+          <div style="font-size:12px; color:var(--text-sub); background:#F8FAFC; padding:6px 10px; border-radius:6px; margin-bottom:6px;">
+            Start Odo: <strong>${t.startOdo || 0} KM</strong> ${isCompleted ? `| End Odo: <strong>${t.endOdo || 0} KM</strong> | Driven: <strong>${t.distanceKm || 0} KM</strong>` : ''}
+            ${(isCompleted && t.distanceKm > 0 && t.fuelExpense > 0) ? ` | Mileage: <strong>${(t.distanceKm / (t.fuelExpense / 100)).toFixed(1)} KM/L</strong>` : ''}
+          </div>
+
           <div class="trip-costs">
             <div>Charged: <strong>${this.formatINR(charged)}</strong></div>
             <div>Fuel: <strong>${this.formatINR(fuel)}</strong></div>
@@ -480,9 +485,49 @@ class TravelsApp {
     this.tempEndPhoto = '';
     const endOdoInput = document.getElementById('endOdoInput');
     const costCustomerEndInput = document.getElementById('costCustomerEndInput');
+    const endPreview = document.getElementById('endOdoPreview');
+    const banner = document.getElementById('endTripCalcBanner');
+    const startOdoDisp = document.getElementById('endModalStartOdoDisplay');
+    const drivenKmDisp = document.getElementById('endModalDrivenKmDisplay');
+    const mileageDisp = document.getElementById('endModalMileageDisplay');
 
-    if (endOdoInput) endOdoInput.value = trip.startOdo ? (parseFloat(trip.startOdo) + 50) : '';
-    if (costCustomerEndInput) costCustomerEndInput.value = trip.costCustomer || 1500;
+    if (endPreview) endPreview.style.display = 'none';
+
+    if (endOdoInput) {
+      endOdoInput.value = trip.startOdo ? (parseFloat(trip.startOdo) + 50) : '';
+    }
+    if (costCustomerEndInput) {
+      costCustomerEndInput.value = trip.costCustomer || '';
+    }
+
+    const updateLiveCalc = () => {
+      const startOdo = parseFloat(trip.startOdo) || 0;
+      const endOdo = parseFloat(endOdoInput?.value) || 0;
+
+      if (startOdo > 0 && endOdo >= startOdo) {
+        const driven = (endOdo - startOdo).toFixed(1);
+        if (startOdoDisp) startOdoDisp.textContent = `Start Odo: ${startOdo} KM`;
+        if (drivenKmDisp) drivenKmDisp.textContent = `Driven: ${driven} KM`;
+
+        if (trip.fuelExpense > 0) {
+          const liters = trip.fuelExpense / 100;
+          const mileage = (parseFloat(driven) / liters).toFixed(1);
+          if (mileageDisp) mileageDisp.innerHTML = `<i class="fas fa-gas-pump"></i> Fuel: ₹${trip.fuelExpense.toFixed(2)} | Mileage: <strong>${mileage} KM/L</strong>`;
+        } else {
+          if (mileageDisp) mileageDisp.innerHTML = `<i class="fas fa-gas-pump"></i> Fuel: ₹0.00 | Mileage: --`;
+        }
+
+        if (banner) banner.style.display = 'flex';
+      } else {
+        if (banner) banner.style.display = 'none';
+      }
+    };
+
+    if (endOdoInput) {
+      endOdoInput.removeEventListener('input', updateLiveCalc);
+      endOdoInput.addEventListener('input', updateLiveCalc);
+      updateLiveCalc();
+    }
 
     const modal = document.getElementById('endTripModal');
     if (modal) modal.classList.add('active');
@@ -597,17 +642,36 @@ class TravelsApp {
 
     container.innerHTML = report.filteredTrips.map(t => {
       const charged = parseFloat(t.costCustomer || 0);
-      const exp = parseFloat(t.fuelExpense || 0) + parseFloat(t.tollExpense || 0) + parseFloat(t.otherExpense || 0);
+      const fuel = parseFloat(t.fuelExpense || 0);
+      const toll = parseFloat(t.tollExpense || 0);
+      const other = parseFloat(t.otherExpense || 0);
+      const exp = fuel + toll + other;
       const profit = charged - exp;
+      const km = parseFloat(t.distanceKm || 0);
+
+      let mileageText = '';
+      if (km > 0 && fuel > 0) {
+        mileageText = ` | Mileage: <strong>${(km / (fuel / 100)).toFixed(1)} KM/L</strong>`;
+      }
 
       return `
         <div class="trip-card">
-          <div style="display:flex; justify-content:space-between; font-weight:700; font-size:13px;">
-            <span>${t.date} (${t.startTime})</span>
-            <span style="color:var(--primary);">Charged: ${this.formatINR(charged)}</span>
+          <div style="display:flex; justify-content:space-between; font-weight:700; font-size:13px; margin-bottom:4px;">
+            <span>${t.date} (${t.startTime}) ${t.customerName ? '| ' + t.customerName : ''}</span>
+            <span style="color:var(--primary); font-size:14px;">Charged: ${this.formatINR(charged)}</span>
           </div>
-          <div style="font-weight:800; font-size:14px; margin:4px 0;">${t.fromPlace} &rarr; ${t.toPlace}</div>
-          <div style="font-size:12px; color:var(--text-sub);">Expenses: ${this.formatINR(exp)} | <strong style="color:${profit >= 0 ? 'var(--success-dark)' : 'var(--danger)'};">Profit: ${this.formatINR(profit)}</strong></div>
+          <div style="font-weight:800; font-size:15px; margin-bottom:4px; color:var(--text-main);">${t.fromPlace} &rarr; ${t.toPlace}</div>
+          
+          <div style="font-size:12px; color:var(--text-sub); background:#F8FAFC; padding:6px 8px; border-radius:6px; margin-bottom:6px;">
+            Start Odo: <strong>${t.startOdo || 0} KM</strong> | End Odo: <strong>${t.endOdo || 0} KM</strong> | Driven: <strong>${km} KM</strong>${mileageText}
+          </div>
+
+          <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-sub); flex-wrap:wrap; gap:4px;">
+            <span>Fuel: ${this.formatINR(fuel)}</span>
+            <span>FASTag Toll: ${this.formatINR(toll)}</span>
+            <span>Other: ${this.formatINR(other)}</span>
+            <strong style="color:${profit >= 0 ? 'var(--success-dark)' : 'var(--danger)'};">Net Profit: ${this.formatINR(profit)}</strong>
+          </div>
         </div>
       `;
     }).join('');
