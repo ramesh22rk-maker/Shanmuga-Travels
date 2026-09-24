@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2563EB">
+  <title>Shanmuga Travels - Car Order & Cost Tracking</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="./css/styles.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Toast Notification Bar -->
+  <div id="toastContainer" class="toast-box"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon"><i class="fas fa-route"></i></div>
+      <div>
+        <div class="brand-title">Shanmuga Travels</div>
+        <div class="brand-sub">Car Order & Cost Tracker</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- PAGE 1: TRIP ORDER ENTRY -->
+    <div class="page active" id="page-entry">
+      <div class="card">
+        <div class="section-head">
+          <i class="fas fa-car" style="color:var(--primary);"></i> Start New Trip Order
+        </div>
+
+        <form id="startTripForm">
+
+          <!-- Auto Date & Time -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Date (Auto)</label>
+              <input type="date" name="date" id="tripDate" class="input-field">
+            </div>
+            <div class="form-group">
+              <label>Time (Auto)</label>
+              <input type="text" name="startTime" id="tripTime" class="input-field">
+            </div>
+          </div>
+
+          <!-- Customer Name (Optional) -->
+          <div class="form-group">
+            <label>Customer Name <span class="optional">(Optional)</span></label>
+            <input type="text" name="customerName" class="input-field" placeholder="Enter customer name (optional)">
+          </div>
+
+          <!-- COMPULSORY Places -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>From Place <span class="required">*</span></label>
+              <input type="text" name="fromPlace" id="fromPlace" list="placesList" class="input-field" placeholder="e.g. Hosur" required>
+            </div>
+            <div class="form-group">
+              <label>Destination <span class="required">*</span></label>
+              <input type="text" name="toPlace" id="toPlace" list="placesList" class="input-field" placeholder="e.g. BLR Airport" required>
+            </div>
+          </div>
+
+          <datalist id="placesList">
+            <option value="Hosur">
+            <option value="Hosur Bus Stand">
+            <option value="Electronic City">
+            <option value="Kempegowda Airport (BLR)">
+            <option value="Koramangala">
+            <option value="Whitefield Tech Park">
+          </datalist>
+
+          <!-- Auto Distance & Toll Calculation Pill -->
+          <div class="auto-calc-box">
+            <div>
+              <div class="auto-calc-info"><i class="fas fa-magic"></i> AUTO ROUTE CALCULATED</div>
+              <div style="font-size:12px; color:var(--text-sub);">Distance & FASTag Toll</div>
+            </div>
+            <div style="text-align:right;">
+              <div class="auto-calc-val" id="autoCalcDistance">35 KM</div>
+              <div style="font-size:12px; font-weight:700; color:var(--warning);" id="autoCalcToll">Toll: ₹110</div>
+            </div>
+          </div>
+
+          <!-- FASTag Toll (Optional / Auto Populated) -->
+          <div class="form-group">
+            <label>FASTag Toll Charges (₹) <span class="optional">(Auto / Manual)</span></label>
+            <input type="number" step="0.01" name="fastagToll" id="fastagTollInput" class="input-field" placeholder="110">
+          </div>
+
+          <!-- Customer Price Charged -->
+          <div class="form-group">
+            <label>Amount Charged to Customer (₹) <span class="optional">(Optional)</span></label>
+            <input type="number" step="0.01" name="costCustomer" class="input-field" placeholder="e.g. 2300">
+          </div>
+
+          <!-- Start Odometer & Photo Upload -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Start Odometer (KM) <span class="optional">(Optional)</span></label>
+              <input type="number" step="0.1" name="startOdo" class="input-field" placeholder="e.g. 45200">
+            </div>
+            <div class="form-group">
+              <label>Odometer Photo <span class="optional">(Optional)</span></label>
+              <label class="photo-box">
+                <i class="fas fa-camera" style="font-size:20px; color:var(--primary);"></i>
+                <div style="font-size:11px; font-weight:700; margin-top:2px;">Snap Photo</div>
+                <input type="file" accept="image/*" capture="environment" id="startOdoPhotoInput" style="display:none;">
+              </label>
+            </div>
+          </div>
+
+          <img id="startOdoPreview" class="photo-preview" style="display:none;">
+
+          <!-- Other Expenses & Notes -->
+          <div class="form-row" style="margin-top:10px;">
+            <div class="form-group">
+              <label>Fuel Expense (₹) <span class="optional">(Optional)</span></label>
+              <input type="number" step="0.01" name="fuelExpense" class="input-field" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label>Other Expense (₹) <span class="optional">(Optional)</span></label>
+              <input type="number" step="0.01" name="otherExpense" class="input-field" placeholder="0.00">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Expense Note / Detail <span class="optional">(Optional)</span></label>
+            <input type="text" name="otherNote" class="input-field" placeholder="e.g. Driver tea / Refreshment">
+          </div>
+
+          <button type="submit" class="btn-primary" style="margin-top:8px;">
+            <i class="fas fa-play"></i> Start Trip Order
+          </button>
+        </form>
+      </div>
+
+      <!-- Recent Orders Log -->
+      <h3 style="font-size:15px; font-weight:800; margin-bottom:12px;">Active & Completed Orders Log</h3>
+      <div id="recentTripsList"></div>
+    </div>
+
+    <!-- PAGE 2: REPORTS & CALENDAR -->
+    <div class="page" id="page-reports">
+      
+      <!-- Filters Card -->
+      <div class="card" style="padding:16px;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Filter By:</label>
+            <select id="reportFilterType" class="input-field">
+              <option value="month" selected>By Month</option>
+              <option value="date">By Date</option>
+              <option value="all">Show All</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Target Value:</label>
+            <select id="reportFilterMonth" class="input-field"></select>
+            <input type="date" id="reportFilterDate" class="input-field" style="display:none;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Search Orders:</label>
+          <input type="text" id="reportSearch" class="input-field" placeholder="Search customer, place name, trip ID...">
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:8px;">
+          <button id="btnExportCSV" class="btn-primary btn-success" style="flex:1;">
+            <i class="fas fa-file-csv"></i> Download CSV
+          </button>
+          <button id="btnPrintReport" class="btn-primary" style="flex:1;">
+            <i class="fas fa-print"></i> Print Report
+          </button>
+        </div>
+      </div>
+
+      <!-- Metrics Summary -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-lbl">Charged Amount</div>
+          <div class="metric-val" id="repTotalEarnings">₹0.00</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl">Total Expenses</div>
+          <div class="metric-val" style="color:var(--danger);" id="repTotalExpenses">₹0.00</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-lbl">Total KM Driven</div>
+          <div class="metric-val" style="color:var(--primary);" id="repTotalKm">0 KM</div>
+        </div>
+        <div class="metric-card full">
+          <div class="metric-lbl" style="color:var(--success-dark);">Net Profit for Us</div>
+          <div class="metric-val" id="repNetProfit">₹0.00</div>
+        </div>
+      </div>
+
+      <!-- Calendar View -->
+      <div class="card">
+        <div class="section-head"><i class="far fa-calendar-alt" style="color:var(--primary);"></i> Calendar View (Day Revenue)</div>
+        <div class="calendar-grid" id="calendarGridContainer"></div>
+      </div>
+
+      <!-- Visual Charts -->
+      <div class="card">
+        <div class="section-head"><i class="fas fa-chart-bar" style="color:var(--primary);"></i> Financial Trend</div>
+        <div style="height:200px;"><canvas id="trendChartCanvas"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="section-head"><i class="fas fa-chart-pie" style="color:var(--primary);"></i> Expense Distribution</div>
+        <div style="height:200px;"><canvas id="expenseChartCanvas"></canvas></div>
+      </div>
+
+      <!-- Detailed Logs -->
+      <h3 style="font-size:15px; font-weight:800; margin-bottom:12px;">Detailed Report Orders</h3>
+      <div id="reportMonthlyList"></div>
+
+    </div>
+
+  </div>
+
+  <!-- End Trip Modal -->
+  <div class="modal-bg" id="endTripModal">
+    <div class="modal-body">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:16px; font-weight:800;">Complete Trip & Finalize Bill</h3>
+        <button class="close-modal" style="background:none; border:none; font-size:18px; cursor:pointer;"><i class="fas fa-times"></i></button>
+      </div>
+
+      <form id="endTripForm">
+        <div class="form-group">
+          <label>End Odometer (KM)</label>
+          <input type="number" step="0.1" name="endOdo" id="endOdoInput" class="input-field" placeholder="Enter ending odometer KM">
+        </div>
+
+        <div class="form-group">
+          <label>End Odometer Photo <span class="optional">(Optional)</span></label>
+          <label class="photo-box">
+            <i class="fas fa-camera" style="font-size:20px; color:var(--success);"></i>
+            <div style="font-size:11px; font-weight:700; margin-top:2px;">Snap Photo</div>
+            <input type="file" accept="image/*" capture="environment" id="endOdoPhotoInput" style="display:none;">
+          </label>
+          <img id="endOdoPreview" class="photo-preview" style="display:none;">
+        </div>
+
+        <div class="form-group">
+          <label>Final Charged Amount to Customer (₹)</label>
+          <input type="number" step="0.01" name="costCustomerEnd" id="costCustomerEndInput" class="input-field" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Add Fuel (₹)</label>
+            <input type="number" step="0.01" name="fuelExpenseEnd" class="input-field" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Add Toll (₹)</label>
+            <input type="number" step="0.01" name="tollExpenseEnd" class="input-field" placeholder="0.00">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary btn-success" style="margin-top:10px;">
+          <i class="fas fa-check-circle"></i> Complete Order
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Day Details Modal -->
+  <div class="modal-bg" id="dayDetailsModal">
+    <div class="modal-body">
+      <div style="display:flex; justify-content:flex-end;">
+        <button class="close-modal" style="background:none; border:none; font-size:18px; cursor:pointer;"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="dayDetailsModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation Bar (2 Pages) -->
+  <nav class="bottom-nav">
+    <a href="#" class="nav-item active" data-tab="entry">
+      <i class="fas fa-edit"></i>
+      <span>Trip Entry</span>
+    </a>
+    <a href="#" class="nav-item" data-tab="reports">
+      <i class="fas fa-chart-pie"></i>
+      <span>Reports & Calendar</span>
+    </a>
+  </nav>
+
+  <script src="./js/data.js"></script>
+  <script src="./js/chart-helpers.js"></script>
+  <script src="./js/reports.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
