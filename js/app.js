@@ -17,6 +17,21 @@ class TravelsApp {
     this.init();
     this.registerServiceWorker();
     this.fetchTripsFromBackend();
+    this.startAutoSync();
+  }
+
+  startAutoSync() {
+    // Auto sync when returning to tab
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Tab active - syncing latest trips from cloud...');
+        this.fetchTripsFromBackend(true);
+      }
+    });
+    // Periodic background sync every 15 seconds
+    setInterval(() => {
+      this.fetchTripsFromBackend(true);
+    }, 15000);
   }
 
   registerServiceWorker() {
@@ -29,7 +44,7 @@ class TravelsApp {
 
   showLoadingState() {
     const container = document.getElementById('recentTripsList');
-    if (container) {
+    if (container && this.data.trips.length === 0) {
       container.innerHTML = `
         <div style="text-align:center; padding:32px; color:var(--text-muted);">
           <i class="fas fa-circle-notch fa-spin" style="font-size:28px; color:var(--primary); margin-bottom:10px;"></i>
@@ -43,10 +58,13 @@ class TravelsApp {
     localStorage.setItem('shanmuga_travels_cache', JSON.stringify(data));
   }
 
-  async fetchTripsFromBackend() {
-    this.showLoadingState();
+  async fetchTripsFromBackend(silent = false) {
+    if (!silent) this.showLoadingState();
     try {
-      const res = await fetch(this.apiBaseUrl);
+      const res = await fetch(`${this.apiBaseUrl}?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store' }
+      });
       if (res.ok) {
         const trips = await res.json();
         if (Array.isArray(trips)) {
@@ -58,11 +76,11 @@ class TravelsApp {
         }
       } else {
         console.warn('API returned error:', res.status);
-        this.renderAll(); // show empty state
+        if (!silent) this.renderAll();
       }
     } catch (err) {
-      console.warn('Cloud unavailable, showing empty state:', err.message);
-      this.renderAll();
+      console.warn('Cloud unavailable:', err.message);
+      if (!silent) this.renderAll();
     }
   }
 
@@ -172,6 +190,39 @@ class TravelsApp {
     updateCalc();
   }
 
+  compressImage(file, callback) {
+    const maxWidth = 800;
+    const maxHeight = 800;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        callback(compressedDataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   bindPhotoUploads() {
     const startInput = document.getElementById('startOdoPhotoInput');
     const startPreview = document.getElementById('startOdoPreview');
@@ -180,16 +231,14 @@ class TravelsApp {
       startInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            this.tempStartPhoto = event.target.result;
+          this.compressImage(file, (dataUrl) => {
+            this.tempStartPhoto = dataUrl;
             if (startPreview) {
-              startPreview.src = event.target.result;
+              startPreview.src = dataUrl;
               startPreview.style.display = 'block';
             }
-            this.showToast('📷 Odometer Photo Attached', 'info');
-          };
-          reader.readAsDataURL(file);
+            this.showToast('📷 Odometer Photo Attached (Compressed)', 'info');
+          });
         }
       });
     }
@@ -201,16 +250,14 @@ class TravelsApp {
       endInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            this.tempEndPhoto = event.target.result;
+          this.compressImage(file, (dataUrl) => {
+            this.tempEndPhoto = dataUrl;
             if (endPreview) {
-              endPreview.src = event.target.result;
+              endPreview.src = dataUrl;
               endPreview.style.display = 'block';
             }
-            this.showToast('📷 End Odometer Photo Attached', 'info');
-          };
-          reader.readAsDataURL(file);
+            this.showToast('📷 End Odometer Photo Attached (Compressed)', 'info');
+          });
         }
       });
     }
@@ -263,7 +310,7 @@ class TravelsApp {
         this.data.trips.unshift(newTrip);
         this.saveLocalData();
 
-        // Send to SQLite API Backend
+        // Send to Redis Cloud API Backend
         try {
           const res = await fetch(this.apiBaseUrl, {
             method: 'POST',
@@ -272,10 +319,16 @@ class TravelsApp {
           });
           if (res.ok) {
             const savedTrip = await res.json();
-            console.log("Trip saved to SQLite DB:", savedTrip);
+            console.log("Trip saved to Redis Cloud DB:", savedTrip);
+            this.showToast(`☁️ Saved to Cloud: ${fromPlace} ➔ ${toPlace}`, 'success');
+          } else {
+            const errText = await res.text();
+            console.error("Cloud save failed:", res.status, errText);
+            this.showToast(`⚠️ Cloud save failed (${res.status}). Stored locally.`, 'danger');
           }
         } catch (err) {
           console.warn("Could not save trip to backend server, saved locally:", err);
+          this.showToast('⚠️ Offine mode: Saved locally only.', 'info');
         }
 
         startForm.reset();
@@ -286,8 +339,6 @@ class TravelsApp {
         this.setDefaultDateTime();
         this.refreshMonthFilterDropdown();
         this.renderAll();
-
-        this.showToast(`🚗 Trip Started: ${fromPlace} ➔ ${toPlace}`, 'success');
       });
     }
 
@@ -327,13 +378,18 @@ class TravelsApp {
 
         this.saveLocalData();
 
-        // Update in SQLite API Backend
+        // Update in Redis API Backend
         try {
-          await fetch(`${this.apiBaseUrl}/${trip.id}`, {
+          const res = await fetch(`${this.apiBaseUrl}/${trip.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(trip)
           });
+          if (res.ok) {
+            this.showToast('☁️ Trip update synced to Cloud!', 'success');
+          } else {
+            console.warn("Cloud update failed:", res.status);
+          }
         } catch (err) {
           console.warn("Could not update trip on backend server:", err);
         }

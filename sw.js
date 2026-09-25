@@ -1,5 +1,5 @@
 // Service Worker for Shanmuga Travels Offline App
-const CACHE_NAME = 'shanmuga-v2';
+const CACHE_NAME = 'shanmuga-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -29,8 +29,11 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // Never cache API requests - always fetch fresh data from cloud
+  if (e.request.url.includes('/api/')) return;
   if (e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request).then((res) => res || fetch(e.request))
   );
 });
+
