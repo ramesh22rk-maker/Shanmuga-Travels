@@ -78,6 +78,14 @@ body {
   font-size: 20px;
 }
 
+.brand-logo-img {
+  height: 46px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.12));
+}
+
 .brand-title {
   font-size: 18px;
   font-weight: 800;

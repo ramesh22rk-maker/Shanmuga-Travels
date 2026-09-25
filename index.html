@@ -24,7 +24,7 @@
   <!-- Header -->
   <header class="app-header">
     <div class="brand">
-      <div class="brand-icon"><i class="fas fa-route"></i></div>
+      <img src="./images/logo.png" alt="Shanmuga Travels Logo" class="brand-logo-img">
       <div>
         <div class="brand-title">Shanmuga Travels</div>
         <div class="brand-sub">Car Order & Cost Tracker</div>
@@ -82,16 +82,16 @@
             <option value="Whitefield Tech Park">
           </datalist>
 
-          <!-- FASTag Toll Charges (Manual Entry) -->
-          <div class="form-group">
-            <label>FASTag Toll Charges (₹) <span class="optional">(Manual Entry / Optional)</span></label>
-            <input type="number" step="0.01" name="fastagToll" id="fastagTollInput" class="input-field" placeholder="Enter FASTag toll amount e.g. 110">
-          </div>
-
           <!-- Customer Price Charged -->
           <div class="form-group">
             <label>Amount Charged to Customer (₹) <span class="optional">(Optional)</span></label>
             <input type="number" step="0.01" name="costCustomer" class="input-field" placeholder="Enter total trip charge e.g. 2300">
+          </div>
+
+          <!-- FASTag Toll Charges (Manual Entry) -->
+          <div class="form-group">
+            <label>FASTag Toll Charges (₹) <span class="optional">(Manual Entry / Optional)</span></label>
+            <input type="number" step="0.01" name="fastagToll" id="fastagTollInput" class="input-field" placeholder="Enter FASTag toll amount e.g. 110">
           </div>
 
           <!-- Start Odometer & Photo Upload -->

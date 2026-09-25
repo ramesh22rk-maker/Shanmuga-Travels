@@ -1,5 +1,5 @@
 // Service Worker for Shanmuga Travels Offline App
-const CACHE_NAME = 'shanmuga-v3';
+const CACHE_NAME = 'shanmuga-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -7,7 +7,8 @@ const ASSETS = [
   './js/app.js',
   './js/data.js',
   './js/reports.js',
-  './js/chart-helpers.js'
+  './js/chart-helpers.js',
+  './images/logo.png'
 ];
 
 self.addEventListener('install', (e) => {
