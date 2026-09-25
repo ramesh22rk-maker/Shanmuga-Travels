@@ -1,8 +1,9 @@
-// Shanmuga Travels - Application Core Engine
+// Shanmuga Travels - Application Core Engine with SQLite REST API Backend Sync
 
 class TravelsApp {
   constructor() {
-    this.data = this.loadData();
+    this.apiBaseUrl = '/api/trips';
+    this.data = this.loadLocalData();
     this.activeTab = 'entry';
     this.reportFilterType = 'month';
     const now = new Date();
@@ -15,6 +16,7 @@ class TravelsApp {
 
     this.init();
     this.registerServiceWorker();
+    this.fetchTripsFromBackend();
   }
 
   registerServiceWorker() {
@@ -25,7 +27,7 @@ class TravelsApp {
     }
   }
 
-  loadData() {
+  loadLocalData() {
     const saved = localStorage.getItem('shanmuga_travels_v1');
     if (saved) {
       try {
@@ -34,12 +36,30 @@ class TravelsApp {
         console.error("Failed to load local data", e);
       }
     }
-    this.saveData(DEFAULT_DATA);
+    this.saveLocalData(DEFAULT_DATA);
     return DEFAULT_DATA;
   }
 
-  saveData(data = this.data) {
+  saveLocalData(data = this.data) {
     localStorage.setItem('shanmuga_travels_v1', JSON.stringify(data));
+  }
+
+  async fetchTripsFromBackend() {
+    try {
+      const res = await fetch(this.apiBaseUrl);
+      if (res.ok) {
+        const trips = await res.json();
+        if (Array.isArray(trips)) {
+          this.data.trips = trips;
+          this.saveLocalData();
+          this.refreshMonthFilterDropdown();
+          this.renderAll();
+          console.log(`Synced ${trips.length} trip(s) from SQLite Database.`);
+        }
+      }
+    } catch (err) {
+      console.warn("Backend API unavailable, operating in local offline mode:", err.message);
+    }
   }
 
   init() {
@@ -196,7 +216,7 @@ class TravelsApp {
     // 1. Start Trip Form
     const startForm = document.getElementById('startTripForm');
     if (startForm) {
-      startForm.addEventListener('submit', (e) => {
+      startForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(startForm);
 
@@ -235,8 +255,24 @@ class TravelsApp {
           otherNote: otherNote
         };
 
+        // Add locally
         this.data.trips.unshift(newTrip);
-        this.saveData();
+        this.saveLocalData();
+
+        // Send to SQLite API Backend
+        try {
+          const res = await fetch(this.apiBaseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newTrip)
+          });
+          if (res.ok) {
+            const savedTrip = await res.json();
+            console.log("Trip saved to SQLite DB:", savedTrip);
+          }
+        } catch (err) {
+          console.warn("Could not save trip to backend server, saved locally:", err);
+        }
 
         startForm.reset();
         this.tempStartPhoto = '';
@@ -254,7 +290,7 @@ class TravelsApp {
     // 2. End Trip Form
     const endTripForm = document.getElementById('endTripForm');
     if (endTripForm) {
-      endTripForm.addEventListener('submit', (e) => {
+      endTripForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(endTripForm);
 
@@ -285,7 +321,19 @@ class TravelsApp {
         if (addToll > 0) trip.tollExpense += addToll;
         if (addOther > 0) trip.otherExpense += addOther;
 
-        this.saveData();
+        this.saveLocalData();
+
+        // Update in SQLite API Backend
+        try {
+          await fetch(`${this.apiBaseUrl}/${trip.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(trip)
+          });
+        } catch (err) {
+          console.warn("Could not update trip on backend server:", err);
+        }
+
         endTripForm.reset();
         this.tempEndPhoto = '';
         this.closeModal('endTripModal');
@@ -334,6 +382,7 @@ class TravelsApp {
     const filterMonthVal = document.getElementById('reportFilterMonth');
     const filterDateVal = document.getElementById('reportFilterDate');
     const searchInput = document.getElementById('reportSearch');
+    const btnExportPDF = document.getElementById('btnExportPDF');
     const btnExportCSV = document.getElementById('btnExportCSV');
     const btnPrintReport = document.getElementById('btnPrintReport');
 
@@ -384,11 +433,19 @@ class TravelsApp {
       });
     }
 
+    if (btnExportPDF) {
+      btnExportPDF.addEventListener('click', () => {
+        const report = getFilteredReportData(this.data.trips, this.reportFilterType, this.reportFilterVal, this.reportSearchQuery);
+        exportReportPDF(report, `Shanmuga_Travels_${this.reportFilterVal || 'All'}`);
+        this.showToast('📄 PDF Report Downloaded!', 'info');
+      });
+    }
+
     if (btnExportCSV) {
       btnExportCSV.addEventListener('click', () => {
         const report = getFilteredReportData(this.data.trips, this.reportFilterType, this.reportFilterVal, this.reportSearchQuery);
         exportReportCSV(report, `Shanmuga_Travels_${this.reportFilterVal || 'All'}`);
-        this.showToast('📥 CSV Downloaded Successfully!', 'info');
+        this.showToast('📥 Excel / CSV Downloaded!', 'info');
       });
     }
 
@@ -461,7 +518,7 @@ class TravelsApp {
             </div>
           ` : ''}
 
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
+          <div style="display:flex; justify-space-between; align-items:center; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
             ${!isCompleted ? `
               <button class="btn-primary btn-success btn-sm" onclick="app.openEndTripModal('${t.id}')">
                 <i class="fas fa-flag-checkered"></i> Complete Trip
@@ -583,10 +640,14 @@ class TravelsApp {
 
   showDayDetails(dateStr) {
     const dayTrips = this.data.trips.filter(t => t.date === dateStr);
-    let content = `<h3 style="font-size:16px; font-weight:800; margin-bottom:12px;">Trips for ${dateStr}</h3>`;
+    let content = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="font-size:16px; font-weight:800; margin:0;">Trips for ${dateStr}</h3>
+      </div>
+    `;
 
     if (dayTrips.length === 0) {
-      content += `<p style="color:var(--text-muted); font-size:14px;">No trips on this date.</p>`;
+      content += `<p style="color:var(--text-muted); font-size:14px;">No trips recorded on this date.</p>`;
     } else {
       let dayTotalRev = 0, dayTotalExp = 0;
 
@@ -598,15 +659,26 @@ class TravelsApp {
 
         return `
           <div style="background:#F8FAFC; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #E2E8F0; font-size:12px;">
-            <div style="font-weight:700; color:var(--primary);">${t.fromPlace} &rarr; ${t.toPlace}</div>
+            <div style="font-weight:700; color:var(--primary);">${t.fromPlace} &rarr; ${t.toPlace} (${t.startTime})</div>
+            <div>Customer: ${t.customerName || 'N/A'} | Odo: ${t.startOdo || 0} to ${t.endOdo || 0} (${t.distanceKm || 0} KM)</div>
             <div>Charged: ₹${rev.toFixed(2)} | Fuel+Toll: ₹${exp.toFixed(2)} | <strong style="color:var(--success-dark);">Profit: ₹${profit.toFixed(2)}</strong></div>
           </div>
         `;
       }).join('');
 
       content += `
-        <div style="background:#ECFDF5; padding:10px; border-radius:8px; margin-top:10px; display:flex; justify-content:space-between; font-weight:800; color:#047857; font-size:13px;">
+        <div style="background:#ECFDF5; padding:10px; border-radius:8px; margin-top:10px; margin-bottom:12px; display:flex; justify-content:space-between; font-weight:800; color:#047857; font-size:13px;">
+          <span>Day Revenue: ₹${dayTotalRev.toLocaleString('en-IN')}</span>
           <span>Day Net Profit: ₹${(dayTotalRev - dayTotalExp).toLocaleString('en-IN')}</span>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+          <button class="btn-primary" style="flex:1; font-size:12px; background:#DC2626; border-color:#DC2626;" onclick="app.downloadDayReportPDF('${dateStr}')">
+            <i class="fas fa-file-pdf"></i> Download PDF
+          </button>
+          <button class="btn-primary btn-success" style="flex:1; font-size:12px;" onclick="app.downloadDayReportCSV('${dateStr}')">
+            <i class="fas fa-file-excel"></i> Download Excel/CSV
+          </button>
         </div>
       `;
     }
@@ -615,6 +687,18 @@ class TravelsApp {
     if (modalBody) modalBody.innerHTML = content;
     const modal = document.getElementById('dayDetailsModal');
     if (modal) modal.classList.add('active');
+  }
+
+  downloadDayReportPDF(dateStr) {
+    const report = getFilteredReportData(this.data.trips, 'date', dateStr, '');
+    exportReportPDF(report, `Shanmuga_Travels_Day_${dateStr}`);
+    this.showToast(`📄 Daily PDF Report for ${dateStr} downloaded!`, 'info');
+  }
+
+  downloadDayReportCSV(dateStr) {
+    const report = getFilteredReportData(this.data.trips, 'date', dateStr, '');
+    exportReportCSV(report, `Shanmuga_Travels_Day_${dateStr}`);
+    this.showToast(`📥 Daily Excel/CSV for ${dateStr} downloaded!`, 'info');
   }
 
   renderReportView() {
@@ -677,10 +761,18 @@ class TravelsApp {
     }).join('');
   }
 
-  deleteTrip(id) {
+  async deleteTrip(id) {
     if (confirm("Delete this trip order?")) {
       this.data.trips = this.data.trips.filter(t => t.id !== id);
-      this.saveData();
+      this.saveLocalData();
+
+      // Delete from SQLite API backend
+      try {
+        await fetch(`${this.apiBaseUrl}/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.warn("Could not delete from backend API server:", err);
+      }
+
       this.refreshMonthFilterDropdown();
       this.renderAll();
       this.showToast('🗑️ Order Deleted', 'danger');
