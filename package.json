@@ -1,13 +1,14 @@
 {
   "name": "shanmuga-travels",
   "version": "2.0.0",
-  "description": "Shanmuga Travels - Transport Management Software with SQLite Backend & PDF/Excel Reports",
-  "main": "server.js",
+  "description": "Shanmuga Travels - Transport Management Software with Upstash Redis Backend & PDF/Excel Reports",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
   },
   "dependencies": {
+    "@upstash/redis": "^1.34.9",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "sqlite3": "^5.1.7"
