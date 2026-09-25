@@ -1,12 +1,11 @@
 // api/health.js
-// Vercel Serverless Function: GET /api/health
-// Simple health check endpoint
+// GET /api/health — checks Redis connection
 
-import { Redis } from '@upstash/redis';
+const { Redis } = require('@upstash/redis');
 
 const redis = Redis.fromEnv();
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
@@ -14,10 +13,10 @@ export default async function handler(req, res) {
     const val = await redis.get('health_check');
     return res.status(200).json({
       status: 'OK',
-      message: 'Shanmuga Travels API is running on Vercel + Upstash Redis',
-      db: val === 'ok' ? 'Connected' : 'Error'
+      message: 'Shanmuga Travels API running on Vercel + Upstash Redis',
+      db: val === 'ok' ? 'Connected ✅' : 'Error ❌'
     });
   } catch (err) {
     return res.status(500).json({ status: 'ERROR', error: err.message });
   }
-}
+};

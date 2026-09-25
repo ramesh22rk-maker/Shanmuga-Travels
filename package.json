@@ -1,8 +1,7 @@
 {
   "name": "shanmuga-travels",
   "version": "2.0.0",
-  "description": "Shanmuga Travels - Transport Management Software with Upstash Redis Backend & PDF/Excel Reports",
-  "type": "module",
+  "description": "Shanmuga Travels - Transport Management Software with Upstash Redis Backend",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
