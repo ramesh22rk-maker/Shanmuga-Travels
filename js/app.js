@@ -38,20 +38,6 @@ class TravelsApp {
     }
   }
 
-  updateSyncStatus(isSyncing, text = 'Synced') {
-    const statusPill = document.getElementById('cloudSyncStatus');
-    const statusText = document.getElementById('cloudStatusText');
-    if (!statusPill || !statusText) return;
-
-    if (isSyncing) {
-      statusPill.classList.add('syncing');
-      statusText.textContent = text;
-    } else {
-      statusPill.classList.remove('syncing');
-      statusText.textContent = text;
-    }
-  }
-
   startAutoSync() {
     // Auto sync when returning to tab
     document.addEventListener('visibilitychange', () => {
@@ -91,7 +77,6 @@ class TravelsApp {
 
   async fetchTripsFromBackend(silent = false) {
     if (!silent) this.showLoadingState();
-    this.updateSyncStatus(true, 'Syncing...');
 
     try {
       const res = await fetch(`${this.apiBaseUrl}?_t=${Date.now()}`, {
@@ -109,17 +94,14 @@ class TravelsApp {
             this.refreshMonthFilterDropdown();
             this.renderAll();
           }
-          this.updateSyncStatus(false, 'Synced ☁️');
           console.log(`✅ Synced ${trips.length} trip(s) from Upstash Redis cloud.`);
         }
       } else {
         console.warn('API returned error:', res.status);
-        this.updateSyncStatus(false, 'Offline');
         if (!silent) this.renderAll();
       }
     } catch (err) {
       console.warn('Cloud unavailable:', err.message);
-      this.updateSyncStatus(false, 'Offline');
       if (!silent) this.renderAll();
     }
   }
