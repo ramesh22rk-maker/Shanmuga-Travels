@@ -17,6 +17,7 @@ module.exports = async function handler(req, res) {
   // ── GET all trips ──
   if (req.method === 'GET') {
     try {
+      res.setHeader('Cache-Control', 'public, max-age=1, s-maxage=2, stale-while-revalidate=59');
       let trips = await redis.get(TRIPS_KEY);
       if (!trips) trips = [];
 

@@ -1,5 +1,5 @@
 // Service Worker for Shanmuga Travels Offline App
-const CACHE_NAME = 'shanmuga-v4';
+const CACHE_NAME = 'shanmuga-v5';
 const ASSETS = [
   './',
   './index.html',

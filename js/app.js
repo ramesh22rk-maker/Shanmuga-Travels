@@ -3,7 +3,7 @@
 class TravelsApp {
   constructor() {
     this.apiBaseUrl = '/api/trips';
-    this.data = { trips: [] };   // always start empty — Redis is the source of truth
+    this.data = { trips: [] };
     this.activeTab = 'entry';
     this.reportFilterType = 'month';
     const now = new Date();
@@ -15,9 +15,41 @@ class TravelsApp {
     this.tempEndPhoto = '';
 
     this.init();
+    this.loadLocalCache();            // ⚡ Instant load from cache (0ms delay!)
     this.registerServiceWorker();
-    this.fetchTripsFromBackend();
+    this.fetchTripsFromBackend(true); // ☁️ Silent background fetch from Redis
     this.startAutoSync();
+  }
+
+  loadLocalCache() {
+    try {
+      const cached = localStorage.getItem('shanmuga_travels_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.trips) && parsed.trips.length > 0) {
+          this.data = parsed;
+          this.refreshMonthFilterDropdown();
+          this.renderAll();
+          console.log(`⚡ Loaded ${parsed.trips.length} cached trip(s) instantly.`);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load local cache:", e);
+    }
+  }
+
+  updateSyncStatus(isSyncing, text = 'Synced') {
+    const statusPill = document.getElementById('cloudSyncStatus');
+    const statusText = document.getElementById('cloudStatusText');
+    if (!statusPill || !statusText) return;
+
+    if (isSyncing) {
+      statusPill.classList.add('syncing');
+      statusText.textContent = text;
+    } else {
+      statusPill.classList.remove('syncing');
+      statusText.textContent = text;
+    }
   }
 
   startAutoSync() {
@@ -28,10 +60,10 @@ class TravelsApp {
         this.fetchTripsFromBackend(true);
       }
     });
-    // Periodic background sync every 15 seconds
+    // Periodic background sync every 20 seconds
     setInterval(() => {
       this.fetchTripsFromBackend(true);
-    }, 15000);
+    }, 20000);
   }
 
   registerServiceWorker() {
@@ -48,38 +80,46 @@ class TravelsApp {
       container.innerHTML = `
         <div style="text-align:center; padding:32px; color:var(--text-muted);">
           <i class="fas fa-circle-notch fa-spin" style="font-size:28px; color:var(--primary); margin-bottom:10px;"></i>
-          <div style="font-weight:700; font-size:14px; margin-top:8px;">Loading trips from cloud...</div>
+          <div style="font-weight:700; font-size:14px; margin-top:8px;">Syncing trips with cloud...</div>
         </div>`;
     }
   }
 
   saveLocalData(data = this.data) {
-    // Keep a local cache only — Redis is always the primary source
     localStorage.setItem('shanmuga_travels_cache', JSON.stringify(data));
   }
 
   async fetchTripsFromBackend(silent = false) {
     if (!silent) this.showLoadingState();
+    this.updateSyncStatus(true, 'Syncing...');
+
     try {
       const res = await fetch(`${this.apiBaseUrl}?_t=${Date.now()}`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache, no-store' }
       });
+
       if (res.ok) {
         const trips = await res.json();
         if (Array.isArray(trips)) {
-          this.data.trips = trips;
-          this.saveLocalData();
-          this.refreshMonthFilterDropdown();
-          this.renderAll();
+          const hasChanged = JSON.stringify(trips) !== JSON.stringify(this.data.trips);
+          if (hasChanged || this.data.trips.length === 0) {
+            this.data.trips = trips;
+            this.saveLocalData();
+            this.refreshMonthFilterDropdown();
+            this.renderAll();
+          }
+          this.updateSyncStatus(false, 'Synced ☁️');
           console.log(`✅ Synced ${trips.length} trip(s) from Upstash Redis cloud.`);
         }
       } else {
         console.warn('API returned error:', res.status);
+        this.updateSyncStatus(false, 'Offline');
         if (!silent) this.renderAll();
       }
     } catch (err) {
       console.warn('Cloud unavailable:', err.message);
+      this.updateSyncStatus(false, 'Offline');
       if (!silent) this.renderAll();
     }
   }
