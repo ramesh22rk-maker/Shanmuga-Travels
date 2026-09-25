@@ -1,9 +1,9 @@
-// Shanmuga Travels - Application Core Engine with SQLite REST API Backend Sync
+// Shanmuga Travels - Application Core Engine with Upstash Redis Cloud Backend
 
 class TravelsApp {
   constructor() {
     this.apiBaseUrl = '/api/trips';
-    this.data = this.loadLocalData();
+    this.data = { trips: [] };   // always start empty — Redis is the source of truth
     this.activeTab = 'entry';
     this.reportFilterType = 'month';
     const now = new Date();
@@ -27,24 +27,24 @@ class TravelsApp {
     }
   }
 
-  loadLocalData() {
-    const saved = localStorage.getItem('shanmuga_travels_v1');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to load local data", e);
-      }
+  showLoadingState() {
+    const container = document.getElementById('recentTripsList');
+    if (container) {
+      container.innerHTML = `
+        <div style="text-align:center; padding:32px; color:var(--text-muted);">
+          <i class="fas fa-circle-notch fa-spin" style="font-size:28px; color:var(--primary); margin-bottom:10px;"></i>
+          <div style="font-weight:700; font-size:14px; margin-top:8px;">Loading trips from cloud...</div>
+        </div>`;
     }
-    this.saveLocalData(DEFAULT_DATA);
-    return DEFAULT_DATA;
   }
 
   saveLocalData(data = this.data) {
-    localStorage.setItem('shanmuga_travels_v1', JSON.stringify(data));
+    // Keep a local cache only — Redis is always the primary source
+    localStorage.setItem('shanmuga_travels_cache', JSON.stringify(data));
   }
 
   async fetchTripsFromBackend() {
+    this.showLoadingState();
     try {
       const res = await fetch(this.apiBaseUrl);
       if (res.ok) {
@@ -54,11 +54,15 @@ class TravelsApp {
           this.saveLocalData();
           this.refreshMonthFilterDropdown();
           this.renderAll();
-          console.log(`Synced ${trips.length} trip(s) from SQLite Database.`);
+          console.log(`✅ Synced ${trips.length} trip(s) from Upstash Redis cloud.`);
         }
+      } else {
+        console.warn('API returned error:', res.status);
+        this.renderAll(); // show empty state
       }
     } catch (err) {
-      console.warn("Backend API unavailable, operating in local offline mode:", err.message);
+      console.warn('Cloud unavailable, showing empty state:', err.message);
+      this.renderAll();
     }
   }
 
