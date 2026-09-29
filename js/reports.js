@@ -23,6 +23,9 @@ function getFilteredReportData(trips, filterType, filterVal, searchQuery) {
   const totalFuel = filtered.reduce((sum, t) => sum + parseFloat(t.fuelExpense || 0), 0);
   const totalTolls = filtered.reduce((sum, t) => sum + parseFloat(t.tollExpense || 0), 0);
   const totalOther = filtered.reduce((sum, t) => sum + parseFloat(t.otherExpense || 0), 0);
+  const totalWaiting = filtered.reduce((sum, t) => sum + parseFloat(t.waitingCharge || 0), 0);
+  const totalParking = filtered.reduce((sum, t) => sum + parseFloat(t.parkingCharge || 0), 0);
+  const totalExtraKmCharges = filtered.reduce((sum, t) => sum + parseFloat(t.extraKmCharge || 0), 0);
   const totalKm = filtered.reduce((sum, t) => sum + parseFloat(t.distanceKm || 0), 0);
   const totalExpenses = totalFuel + totalTolls + totalOther;
   const netProfit = totalCostCustomers - totalExpenses;
@@ -33,6 +36,9 @@ function getFilteredReportData(trips, filterType, filterVal, searchQuery) {
     totalFuel,
     totalTolls,
     totalOther,
+    totalWaiting,
+    totalParking,
+    totalExtraKmCharges,
     totalKm,
     totalExpenses,
     netProfit
@@ -54,17 +60,20 @@ function exportReportCSV(reportData, label = 'Shanmuga_Travels_Report') {
   csv += `NET PROFIT FOR US,₹${reportData.netProfit.toFixed(2)}\n\n`;
 
   csv += "TRIP LOG DETAILS\n";
-  csv += "Date,Time,Status,Customer Name,From Place,Destination,Start Odometer (KM),End Odometer (KM),KM Driven,Charged Amount (INR),Fuel Expense (INR),FASTag Toll (INR),Other Expense (INR),Net Profit (INR)\n";
+  csv += "Date,Time,Status,Customer Name,From Place,Destination,Start Odometer (KM),End Odometer (KM),KM Driven,Charged Amount (INR),Fuel Expense (INR),FASTag Toll (INR),Other Expense (INR),Waiting Charge (INR),Parking (INR),Extra KM Charge (INR),Net Profit (INR)\n";
 
   reportData.filteredTrips.forEach(t => {
     const rev = parseFloat(t.costCustomer || 0);
     const fuel = parseFloat(t.fuelExpense || 0);
     const toll = parseFloat(t.tollExpense || 0);
     const other = parseFloat(t.otherExpense || 0);
+    const waiting = parseFloat(t.waitingCharge || 0);
+    const parking = parseFloat(t.parkingCharge || 0);
+    const extraKm = parseFloat(t.extraKmCharge || 0);
     const exp = fuel + toll + other;
     const profit = rev - exp;
 
-    csv += `"${t.date}","${t.startTime}","${t.status}","${t.customerName || ''}","${t.fromPlace}","${t.toPlace}",${t.startOdo || 0},${t.endOdo || 0},${t.distanceKm || 0},${rev.toFixed(2)},${fuel.toFixed(2)},${toll.toFixed(2)},${other.toFixed(2)},${profit.toFixed(2)}\n`;
+    csv += `"${t.date}","${t.startTime}","${t.status}","${t.customerName || ''}","${t.fromPlace}","${t.toPlace}",${t.startOdo || 0},${t.endOdo || 0},${t.distanceKm || 0},${rev.toFixed(2)},${fuel.toFixed(2)},${toll.toFixed(2)},${other.toFixed(2)},${waiting.toFixed(2)},${parking.toFixed(2)},${extraKm.toFixed(2)},${profit.toFixed(2)}\n`;
   });
 
   const encodedUri = encodeURI(csv);
@@ -131,7 +140,7 @@ function exportReportPDF(reportData, label = 'Shanmuga_Travels_Report') {
   doc.setFontSize(9);
   doc.text(`Total Trips: ${reportData.filteredTrips.length}`, 18, 55);
   doc.text(`Total Distance: ${reportData.totalKm.toLocaleString('en-IN')} KM`, 75, 55);
-  doc.text(`Total Revenue Charged: RS. ${reportData.totalCostCustomers.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 135, 55);
+  doc.text(`Total Revenue: RS. ${reportData.totalCostCustomers.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 135, 55);
 
   doc.text(`Fuel Expenses: RS. ${reportData.totalFuel.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 18, 62);
   doc.text(`FASTag Tolls: RS. ${reportData.totalTolls.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 75, 62);

@@ -1,4 +1,4 @@
-// Shanmuga Travels - Application Core Engine with Upstash Redis Cloud Backend
+// Shanmuga Travels - Application Core Engine with Cloud & Local Sync
 
 class TravelsApp {
   constructor() {
@@ -11,16 +11,73 @@ class TravelsApp {
     this.reportSearchQuery = '';
     this.currentCalendarMonth = this.reportFilterVal;
     this.activeEndingTripId = null;
+    this.activeEditingTripId = null;
     this.tempStartPhoto = '';
     this.tempEndPhoto = '';
+    this.tempEditStartPhoto = '';
+    this.tempEditEndPhoto = '';
 
     this.init();
     this.loadLocalCache();            // ⚡ Instant load from cache (0ms delay!)
     this.registerServiceWorker();
-    this.fetchTripsFromBackend(true); // ☁️ Silent background fetch from Redis
+    this.fetchTripsFromBackend(true); // ☁️ Silent background fetch from backend
     this.startAutoSync();
   }
 
+  // ─── REMEMBERED PLACES SYSTEM ───
+  getRememberedPlaces() {
+    try {
+      const stored = localStorage.getItem('shanmuga_places');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn("Could not read places from storage:", e);
+    }
+    const defaultPlaces = (typeof ROUTE_DATABASE !== 'undefined' && ROUTE_DATABASE.places) ? ROUTE_DATABASE.places : [
+      "Hosur",
+      "Hosur Bus Stand",
+      "Hosur SIPCOT",
+      "Electronic City",
+      "Kempegowda Airport (BLR)",
+      "Koramangala",
+      "Indiranagar",
+      "Whitefield Tech Park",
+      "HSR Layout",
+      "Peenya Industrial Area",
+      "Bannerghatta Road",
+      "Mysuru Road"
+    ];
+    return defaultPlaces;
+  }
+
+  saveRememberedPlace(name) {
+    if (!name || typeof name !== 'string') return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed.length < 2) return;
+
+    const places = this.getRememberedPlaces();
+    const exists = places.some(p => p.toLowerCase() === trimmed.toLowerCase());
+    if (!exists) {
+      places.push(trimmed);
+      try {
+        localStorage.setItem('shanmuga_places', JSON.stringify(places));
+      } catch (e) {}
+      this.updatePlacesDatalists();
+      console.log(`📍 Saved new location for future auto-complete: "${trimmed}"`);
+    }
+  }
+
+  updatePlacesDatalists() {
+    const places = this.getRememberedPlaces();
+    const datalists = document.querySelectorAll('.places-datalist, #placesList');
+    datalists.forEach(dl => {
+      dl.innerHTML = places.map(p => `<option value="${p}">`).join('');
+    });
+  }
+
+  // ─── CACHE & SYNC ───
   loadLocalCache() {
     try {
       const cached = localStorage.getItem('shanmuga_travels_cache');
@@ -28,6 +85,11 @@ class TravelsApp {
         const parsed = JSON.parse(cached);
         if (parsed && Array.isArray(parsed.trips) && parsed.trips.length > 0) {
           this.data = parsed;
+          // Collect any places from cached trips into remembered places
+          this.data.trips.forEach(t => {
+            if (t.fromPlace) this.saveRememberedPlace(t.fromPlace);
+            if (t.toPlace) this.saveRememberedPlace(t.toPlace);
+          });
           this.refreshMonthFilterDropdown();
           this.renderAll();
           console.log(`⚡ Loaded ${parsed.trips.length} cached trip(s) instantly.`);
@@ -39,14 +101,12 @@ class TravelsApp {
   }
 
   startAutoSync() {
-    // Auto sync when returning to tab
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        console.log('Tab active - syncing latest trips from cloud...');
+        console.log('Tab active - syncing latest trips from backend...');
         this.fetchTripsFromBackend(true);
       }
     });
-    // Periodic background sync every 20 seconds
     setInterval(() => {
       this.fetchTripsFromBackend(true);
     }, 20000);
@@ -90,18 +150,22 @@ class TravelsApp {
           const hasChanged = JSON.stringify(trips) !== JSON.stringify(this.data.trips);
           if (hasChanged || this.data.trips.length === 0) {
             this.data.trips = trips;
+            this.data.trips.forEach(t => {
+              if (t.fromPlace) this.saveRememberedPlace(t.fromPlace);
+              if (t.toPlace) this.saveRememberedPlace(t.toPlace);
+            });
             this.saveLocalData();
             this.refreshMonthFilterDropdown();
             this.renderAll();
           }
-          console.log(`✅ Synced ${trips.length} trip(s) from Upstash Redis cloud.`);
+          console.log(`✅ Synced ${trips.length} trip(s) from Backend.`);
         }
       } else {
         console.warn('API returned error:', res.status);
         if (!silent) this.renderAll();
       }
     } catch (err) {
-      console.warn('Cloud unavailable:', err.message);
+      console.warn('Backend unavailable:', err.message);
       if (!silent) this.renderAll();
     }
   }
@@ -112,6 +176,7 @@ class TravelsApp {
     this.bindAutoCalc();
     this.bindPhotoUploads();
     this.bindReportFilters();
+    this.updatePlacesDatalists();
     this.setDefaultDateTime();
     this.renderAll();
   }
@@ -183,35 +248,183 @@ class TravelsApp {
       hours = hours % 12 || 12;
       timeInput.value = `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
     }
+
+    // Default Fastag should be 0
+    const tollInput = document.getElementById('fastagTollInput');
+    if (tollInput && (!tollInput.value || tollInput.value === '')) {
+      tollInput.value = '0';
+    }
   }
 
-  // AUTO CALC DISTANCE & FASTAG FROM ROUTE
+  // AUTO CALC & REMEMBER PLACES
   bindAutoCalc() {
     const fromInput = document.getElementById('fromPlace');
     const toInput = document.getElementById('toPlace');
 
     const updateCalc = () => {
-      const fromVal = fromInput ? fromInput.value : '';
-      const toVal = toInput ? toInput.value : '';
+      const fromVal = fromInput ? fromInput.value.trim() : '';
+      const toVal = toInput ? toInput.value.trim() : '';
 
-      const routeInfo = ROUTE_DATABASE.calculateRoute(fromVal, toVal);
-      const estDistanceEl = document.getElementById('autoCalcDistance');
-      const estTollEl = document.getElementById('autoCalcToll');
-      const tollInput = document.getElementById('fastagTollInput');
-
-      if (estDistanceEl) estDistanceEl.textContent = `${routeInfo.distanceKm} KM`;
-      if (estTollEl) estTollEl.textContent = `₹${routeInfo.autoToll}`;
-
-      if (tollInput && (!tollInput.value || tollInput.value === '0')) {
-        tollInput.value = routeInfo.autoToll;
-      }
+      if (fromVal) this.saveRememberedPlace(fromVal);
+      if (toVal) this.saveRememberedPlace(toVal);
     };
 
-    if (fromInput) fromInput.addEventListener('input', updateCalc);
-    if (toInput) toInput.addEventListener('input', updateCalc);
-    updateCalc();
+    if (fromInput) {
+      fromInput.addEventListener('change', updateCalc);
+      fromInput.addEventListener('blur', updateCalc);
+    }
+    if (toInput) {
+      toInput.addEventListener('change', updateCalc);
+      toInput.addEventListener('blur', updateCalc);
+    }
+
+    // Connect edit place inputs as well
+    const editFrom = document.getElementById('editFromPlace');
+    const editTo = document.getElementById('editToPlace');
+    if (editFrom) {
+      editFrom.addEventListener('change', () => this.saveRememberedPlace(editFrom.value));
+      editFrom.addEventListener('blur', () => this.saveRememberedPlace(editFrom.value));
+    }
+    if (editTo) {
+      editTo.addEventListener('change', () => this.saveRememberedPlace(editTo.value));
+      editTo.addEventListener('blur', () => this.saveRememberedPlace(editTo.value));
+    }
   }
 
+  // ─── EXTRA CHARGES ACCORDION & CALCULATOR ENGINE ───
+  toggleExtraSection(prefix, addonType, forceState = null) {
+    // prefix is 'start' or 'edit'
+    // addonType is 'waiting', 'parking', 'extraKm'
+    const boxId = prefix === 'start'
+      ? (addonType === 'waiting' ? 'startExtraWaitingBox' : (addonType === 'parking' ? 'startExtraParkingBox' : 'startExtraKmBox'))
+      : (addonType === 'waiting' ? 'editExtraWaitingBox' : (addonType === 'parking' ? 'editExtraParkingBox' : 'editExtraKmBox'));
+
+    const btnId = prefix === 'start'
+      ? (addonType === 'waiting' ? 'startToggleWaitingBtn' : (addonType === 'parking' ? 'startToggleParkingBtn' : 'startToggleExtraKmBtn'))
+      : (addonType === 'waiting' ? 'editToggleWaitingBtn' : (addonType === 'parking' ? 'editToggleParkingBtn' : 'editToggleExtraKmBtn'));
+
+    const box = document.getElementById(boxId);
+    const btn = document.getElementById(btnId);
+    if (!box) return;
+
+    let willShow;
+    if (forceState !== null) {
+      willShow = forceState;
+    } else {
+      willShow = box.style.display === 'none' || box.style.display === '';
+    }
+
+    box.style.display = willShow ? 'block' : 'none';
+    if (btn) {
+      if (willShow) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+
+    // If hiding, user explicitly closed it
+    if (!willShow) {
+      if (addonType === 'waiting') {
+        const chargeEl = document.getElementById(prefix === 'start' ? 'startWaitingCharge' : 'editWaitingCharge');
+        const durEl = document.getElementById(prefix === 'start' ? 'startWaitingDuration' : 'editWaitingDuration');
+        if (chargeEl) chargeEl.value = '0';
+        if (durEl) durEl.value = '';
+      } else if (addonType === 'parking') {
+        const parkEl = document.getElementById(prefix === 'start' ? 'startParkingCharge' : 'editParkingCharge');
+        if (parkEl) parkEl.value = '0';
+      } else if (addonType === 'extraKm') {
+        const kmEl = document.getElementById(prefix === 'start' ? 'startExtraKm' : 'editExtraKm');
+        const chargeEl = document.getElementById(prefix === 'start' ? 'startExtraKmCharge' : 'editExtraKmCharge');
+        if (kmEl) kmEl.value = '';
+        if (chargeEl) chargeEl.value = '0';
+      }
+    }
+
+    this.updateExtrasSubtotal(prefix);
+  }
+
+  calcWaitingCharge(prefix) {
+    const unitEl = document.getElementById(prefix === 'start' ? 'startWaitingUnit' : 'editWaitingUnit');
+    const durEl = document.getElementById(prefix === 'start' ? 'startWaitingDuration' : 'editWaitingDuration');
+    const rateEl = document.getElementById(prefix === 'start' ? 'startWaitingRate' : 'editWaitingRate');
+    const chargeEl = document.getElementById(prefix === 'start' ? 'startWaitingCharge' : 'editWaitingCharge');
+    const hintEl = document.getElementById(prefix === 'start' ? 'startWaitingHint' : null);
+    const durLbl = document.getElementById(prefix === 'start' ? 'startWaitingDurationLbl' : 'editWaitingDurationLbl');
+
+    const unit = unitEl ? unitEl.value : 'hours';
+    const duration = parseFloat(durEl?.value) || 0;
+    const rate = parseFloat(rateEl?.value) || 100;
+
+    if (durLbl) durLbl.textContent = unit === 'hours' ? 'Waiting Time (Hours)' : 'Waiting Time (Minutes)';
+
+    let totalWaiting = 0;
+    if (unit === 'hours') {
+      totalWaiting = duration * rate;
+    } else {
+      totalWaiting = (duration / 60) * rate;
+    }
+
+    totalWaiting = Math.round(totalWaiting * 100) / 100;
+    if (chargeEl) chargeEl.value = totalWaiting > 0 ? totalWaiting : '0';
+
+    if (hintEl) {
+      if (duration > 0) {
+        hintEl.innerHTML = `⚡ ${duration} ${unit} @ ₹${rate}/hr = <strong>₹${totalWaiting.toFixed(2)}</strong>`;
+      } else {
+        hintEl.textContent = `⚡ 1 Hour = ₹${rate} default (Auto calculates ₹ for hours / mins)`;
+      }
+    }
+
+    this.updateExtrasSubtotal(prefix);
+  }
+
+  calcExtraKmCharge(prefix) {
+    const kmEl = document.getElementById(prefix === 'start' ? 'startExtraKm' : 'editExtraKm');
+    const rateEl = document.getElementById(prefix === 'start' ? 'startExtraKmRate' : 'editExtraKmRate');
+    const chargeEl = document.getElementById(prefix === 'start' ? 'startExtraKmCharge' : 'editExtraKmCharge');
+    const hintEl = document.getElementById(prefix === 'start' ? 'startExtraKmHint' : null);
+
+    const km = parseFloat(kmEl?.value) || 0;
+    const rate = parseFloat(rateEl?.value) || 11;
+
+    let totalExtraKm = km * rate;
+    totalExtraKm = Math.round(totalExtraKm * 100) / 100;
+
+    if (chargeEl) chargeEl.value = totalExtraKm > 0 ? totalExtraKm : '0';
+
+    if (hintEl) {
+      if (km > 0) {
+        hintEl.innerHTML = `⚡ ${km} KM @ ₹${rate}/KM = <strong>₹${totalExtraKm.toFixed(2)}</strong>`;
+      } else {
+        hintEl.textContent = `⚡ Extra KM @ ₹${rate}/KM (e.g. 10 KM × ₹${rate} = ₹${10 * rate})`;
+      }
+    }
+
+    this.updateExtrasSubtotal(prefix);
+  }
+
+  updateExtrasSubtotal(prefix) {
+    const waitingVal = parseFloat(document.getElementById(prefix === 'start' ? 'startWaitingCharge' : 'editWaitingCharge')?.value) || 0;
+    const parkingVal = parseFloat(document.getElementById(prefix === 'start' ? 'startParkingCharge' : 'editParkingCharge')?.value) || 0;
+    const extraKmVal = parseFloat(document.getElementById(prefix === 'start' ? 'startExtraKmCharge' : 'editExtraKmCharge')?.value) || 0;
+
+    const subtotal = waitingVal + parkingVal + extraKmVal;
+
+    if (prefix === 'start') {
+      const badge = document.getElementById('startExtrasTotalBadge');
+      const totalVal = document.getElementById('startExtrasTotalVal');
+      if (badge && totalVal) {
+        if (subtotal > 0) {
+          badge.style.display = 'block';
+          totalVal.textContent = `₹${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+    } else {
+      this.calcEditLiveTally();
+    }
+  }
+
+  // ─── PHOTO COMPRESSION & UPLOAD ───
   compressImage(file, callback) {
     const maxWidth = 800;
     const maxHeight = 800;
@@ -248,7 +461,6 @@ class TravelsApp {
   bindPhotoUploads() {
     const startInput = document.getElementById('startOdoPhotoInput');
     const startPreview = document.getElementById('startOdoPreview');
-
     if (startInput) {
       startInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -259,7 +471,7 @@ class TravelsApp {
               startPreview.src = dataUrl;
               startPreview.style.display = 'block';
             }
-            this.showToast('📷 Odometer Photo Attached (Compressed)', 'info');
+            this.showToast('📷 Odometer Photo Attached', 'info');
           });
         }
       });
@@ -267,7 +479,6 @@ class TravelsApp {
 
     const endInput = document.getElementById('endOdoPhotoInput');
     const endPreview = document.getElementById('endOdoPreview');
-
     if (endInput) {
       endInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -278,13 +489,51 @@ class TravelsApp {
               endPreview.src = dataUrl;
               endPreview.style.display = 'block';
             }
-            this.showToast('📷 End Odometer Photo Attached (Compressed)', 'info');
+            this.showToast('📷 End Odometer Photo Attached', 'info');
+          });
+        }
+      });
+    }
+
+    // Edit modal photo inputs
+    const editStartInput = document.getElementById('editStartPhotoInput');
+    const editStartPreview = document.getElementById('editStartPhotoPreview');
+    if (editStartInput) {
+      editStartInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          this.compressImage(file, (dataUrl) => {
+            this.tempEditStartPhoto = dataUrl;
+            if (editStartPreview) {
+              editStartPreview.src = dataUrl;
+              editStartPreview.style.display = 'block';
+            }
+            this.showToast('📷 Start Odo Photo Updated', 'info');
+          });
+        }
+      });
+    }
+
+    const editEndInput = document.getElementById('editEndPhotoInput');
+    const editEndPreview = document.getElementById('editEndPhotoPreview');
+    if (editEndInput) {
+      editEndInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          this.compressImage(file, (dataUrl) => {
+            this.tempEditEndPhoto = dataUrl;
+            if (editEndPreview) {
+              editEndPreview.src = dataUrl;
+              editEndPreview.style.display = 'block';
+            }
+            this.showToast('📷 End Odo Photo Updated', 'info');
           });
         }
       });
     }
   }
 
+  // ─── FORMS BINDING ───
   bindForms() {
     // 1. Start Trip Form
     const startForm = document.getElementById('startTripForm');
@@ -293,13 +542,17 @@ class TravelsApp {
         e.preventDefault();
         const formData = new FormData(startForm);
 
-        const fromPlace = formData.get('fromPlace');
-        const toPlace = formData.get('toPlace');
+        const fromPlace = formData.get('fromPlace')?.trim();
+        const toPlace = formData.get('toPlace')?.trim();
 
         if (!fromPlace || !toPlace) {
           alert("From Place and Destination are compulsory!");
           return;
         }
+
+        // Save places for future autocomplete
+        this.saveRememberedPlace(fromPlace);
+        this.saveRememberedPlace(toPlace);
 
         const startOdo = parseFloat(formData.get('startOdo')) || 0;
         const costCustomer = parseFloat(formData.get('costCustomer')) || 0;
@@ -307,6 +560,15 @@ class TravelsApp {
         const fuelExpense = parseFloat(formData.get('fuelExpense')) || 0;
         const otherExpense = parseFloat(formData.get('otherExpense')) || 0;
         const otherNote = formData.get('otherNote') || '';
+
+        // Extra charges
+        const waitingCharge = parseFloat(formData.get('waitingCharge')) || 0;
+        const waitingDuration = parseFloat(formData.get('waitingDuration')) || 0;
+        const waitingUnit = formData.get('waitingUnit') || 'hours';
+        const parkingCharge = parseFloat(formData.get('parkingCharge')) || 0;
+        const extraKm = parseFloat(formData.get('extraKm')) || 0;
+        const extraKmRate = parseFloat(formData.get('extraKmRate')) || 11;
+        const extraKmCharge = parseFloat(formData.get('extraKmCharge')) || 0;
 
         const newTrip = {
           id: `TRP-${Math.floor(100 + Math.random() * 900)}`,
@@ -325,14 +587,21 @@ class TravelsApp {
           fuelExpense: fuelExpense,
           tollExpense: fastagToll,
           otherExpense: otherExpense,
-          otherNote: otherNote
+          otherNote: otherNote,
+          waitingCharge: waitingCharge,
+          waitingDuration: waitingDuration,
+          waitingUnit: waitingUnit,
+          parkingCharge: parkingCharge,
+          extraKm: extraKm,
+          extraKmRate: extraKmRate,
+          extraKmCharge: extraKmCharge
         };
 
         // Add locally
         this.data.trips.unshift(newTrip);
         this.saveLocalData();
 
-        // Send to Redis Cloud API Backend
+        // Send to backend API
         try {
           const res = await fetch(this.apiBaseUrl, {
             method: 'POST',
@@ -340,23 +609,24 @@ class TravelsApp {
             body: JSON.stringify(newTrip)
           });
           if (res.ok) {
-            const savedTrip = await res.json();
-            console.log("Trip saved to Redis Cloud DB:", savedTrip);
-            this.showToast(`☁️ Saved to Cloud: ${fromPlace} ➔ ${toPlace}`, 'success');
+            this.showToast(`☁️ Saved Order: ${fromPlace} ➔ ${toPlace}`, 'success');
           } else {
-            const errText = await res.text();
-            console.error("Cloud save failed:", res.status, errText);
-            this.showToast(`⚠️ Cloud save failed (${res.status}). Stored locally.`, 'danger');
+            this.showToast(`Saved locally!`, 'info');
           }
         } catch (err) {
-          console.warn("Could not save trip to backend server, saved locally:", err);
-          this.showToast('⚠️ Offine mode: Saved locally only.', 'info');
+          console.warn("Could not save trip to server, saved locally:", err);
+          this.showToast('Saved locally in offline mode.', 'info');
         }
 
         startForm.reset();
         this.tempStartPhoto = '';
         const startPreview = document.getElementById('startOdoPreview');
         if (startPreview) startPreview.style.display = 'none';
+
+        // Reset extras panels
+        this.toggleExtraSection('start', 'waiting', false);
+        this.toggleExtraSection('start', 'parking', false);
+        this.toggleExtraSection('start', 'extraKm', false);
 
         this.setDefaultDateTime();
         this.refreshMonthFilterDropdown();
@@ -385,35 +655,27 @@ class TravelsApp {
         const finalCostCustomer = parseFloat(formData.get('costCustomerEnd')) || trip.costCustomer;
 
         trip.endOdo = endOdo;
-        trip.endOdoPhoto = this.tempEndPhoto || '';
+        if (this.tempEndPhoto) trip.endOdoPhoto = this.tempEndPhoto;
         trip.distanceKm = distanceKm;
         trip.costCustomer = finalCostCustomer;
         trip.status = 'completed';
 
         const addFuel = parseFloat(formData.get('fuelExpenseEnd')) || 0;
         const addToll = parseFloat(formData.get('tollExpenseEnd')) || 0;
-        const addOther = parseFloat(formData.get('otherExpenseEnd')) || 0;
 
-        if (addFuel > 0) trip.fuelExpense += addFuel;
-        if (addToll > 0) trip.tollExpense += addToll;
-        if (addOther > 0) trip.otherExpense += addOther;
+        if (addFuel > 0) trip.fuelExpense = (parseFloat(trip.fuelExpense) || 0) + addFuel;
+        if (addToll > 0) trip.tollExpense = (parseFloat(trip.tollExpense) || 0) + addToll;
 
         this.saveLocalData();
 
-        // Update in Redis API Backend
         try {
-          const res = await fetch(`${this.apiBaseUrl}/${trip.id}`, {
+          await fetch(`${this.apiBaseUrl}/${trip.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(trip)
           });
-          if (res.ok) {
-            this.showToast('☁️ Trip update synced to Cloud!', 'success');
-          } else {
-            console.warn("Cloud update failed:", res.status);
-          }
         } catch (err) {
-          console.warn("Could not update trip on backend server:", err);
+          console.warn("Server update failed, saved locally:", err);
         }
 
         endTripForm.reset();
@@ -421,8 +683,91 @@ class TravelsApp {
         this.closeModal('endTripModal');
         this.renderAll();
 
-        const netProfit = trip.costCustomer - (trip.fuelExpense + trip.tollExpense + trip.otherExpense);
-        this.showToast(`🏁 Trip Completed! Net Profit: ₹${netProfit.toLocaleString('en-IN')}`, 'success');
+        const totalExp = (parseFloat(trip.fuelExpense) || 0) + (parseFloat(trip.tollExpense) || 0) + (parseFloat(trip.otherExpense) || 0);
+        const netProfit = trip.costCustomer - totalExp;
+        this.showToast(`🏁 Trip Completed! Net Profit: ₹${netProfit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 'success');
+      });
+    }
+
+    // 3. Edit Trip Form
+    const editTripForm = document.getElementById('editTripForm');
+    if (editTripForm) {
+      editTripForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(editTripForm);
+        const tripId = formData.get('id');
+
+        const trip = this.data.trips.find(t => t.id === tripId);
+        if (!trip) {
+          alert("Trip order not found!");
+          return;
+        }
+
+        const fromPlace = formData.get('fromPlace')?.trim() || trip.fromPlace;
+        const toPlace = formData.get('toPlace')?.trim() || trip.toPlace;
+
+        this.saveRememberedPlace(fromPlace);
+        this.saveRememberedPlace(toPlace);
+
+        const startOdo = parseFloat(formData.get('startOdo')) || 0;
+        const endOdo = parseFloat(formData.get('endOdo')) || 0;
+        let distanceKm = 0;
+        if (endOdo > 0 && startOdo > 0 && endOdo >= startOdo) {
+          distanceKm = endOdo - startOdo;
+        } else if (trip.distanceKm) {
+          distanceKm = trip.distanceKm;
+        }
+
+        trip.status = formData.get('status') || trip.status;
+        trip.date = formData.get('date') || trip.date;
+        trip.startTime = formData.get('startTime') || trip.startTime;
+        trip.customerName = formData.get('customerName') || '';
+        trip.fromPlace = fromPlace;
+        trip.toPlace = toPlace;
+        trip.startOdo = startOdo;
+        trip.endOdo = endOdo;
+        trip.distanceKm = distanceKm;
+        trip.costCustomer = parseFloat(formData.get('costCustomer')) || 0;
+        trip.tollExpense = parseFloat(formData.get('tollExpense')) || 0;
+        trip.fuelExpense = parseFloat(formData.get('fuelExpense')) || 0;
+        trip.otherExpense = parseFloat(formData.get('otherExpense')) || 0;
+        trip.otherNote = formData.get('otherNote') || '';
+
+        // Photos
+        if (this.tempEditStartPhoto) trip.startOdoPhoto = this.tempEditStartPhoto;
+        if (this.tempEditEndPhoto) trip.endOdoPhoto = this.tempEditEndPhoto;
+
+        // Extra charges
+        trip.waitingCharge = parseFloat(formData.get('waitingCharge')) || 0;
+        trip.waitingDuration = parseFloat(formData.get('waitingDuration')) || 0;
+        trip.waitingUnit = formData.get('waitingUnit') || 'hours';
+        trip.parkingCharge = parseFloat(formData.get('parkingCharge')) || 0;
+        trip.extraKm = parseFloat(formData.get('extraKm')) || 0;
+        trip.extraKmRate = parseFloat(formData.get('extraKmRate')) || 11;
+        trip.extraKmCharge = parseFloat(formData.get('extraKmCharge')) || 0;
+
+        this.saveLocalData();
+
+        // Update in backend API
+        try {
+          const res = await fetch(`${this.apiBaseUrl}/${trip.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(trip)
+          });
+          if (res.ok) {
+            this.showToast(`✅ Order #${trip.id} updated and synced!`, 'success');
+          } else {
+            this.showToast(`✅ Order #${trip.id} updated locally!`, 'info');
+          }
+        } catch (err) {
+          console.warn("Backend update failed, saved locally:", err);
+          this.showToast(`✅ Order #${trip.id} updated locally!`, 'info');
+        }
+
+        this.closeModal('editTripModal');
+        this.refreshMonthFilterDropdown();
+        this.renderAll();
       });
     }
 
@@ -434,6 +779,219 @@ class TravelsApp {
     });
   }
 
+  // ─── EDIT MODAL OPEN & LIVE CALC ───
+  openEditTripModal(tripId) {
+    this.activeEditingTripId = tripId;
+    const trip = this.data.trips.find(t => t.id === tripId);
+    if (!trip) {
+      alert("Trip record not found!");
+      return;
+    }
+
+    this.tempEditStartPhoto = '';
+    this.tempEditEndPhoto = '';
+
+    // Populate basic fields
+    document.getElementById('editTripId').value = trip.id;
+    const idDisplay = document.getElementById('editModalTripId');
+    if (idDisplay) idDisplay.textContent = `Order ID: ${trip.id} (${trip.status.toUpperCase()})`;
+
+    const statusEl = document.getElementById('editStatus');
+    if (statusEl) statusEl.value = trip.status || 'active';
+
+    const dateEl = document.getElementById('editDate');
+    if (dateEl) dateEl.value = trip.date || '';
+
+    const timeEl = document.getElementById('editStartTime');
+    if (timeEl) timeEl.value = trip.startTime || '';
+
+    const custEl = document.getElementById('editCustomerName');
+    if (custEl) custEl.value = trip.customerName || '';
+
+    const fromEl = document.getElementById('editFromPlace');
+    if (fromEl) fromEl.value = trip.fromPlace || '';
+
+    const toEl = document.getElementById('editToPlace');
+    if (toEl) toEl.value = trip.toPlace || '';
+
+    const startOdoEl = document.getElementById('editStartOdo');
+    if (startOdoEl) startOdoEl.value = trip.startOdo || '';
+
+    const endOdoEl = document.getElementById('editEndOdo');
+    if (endOdoEl) endOdoEl.value = trip.endOdo || '';
+
+    const costEl = document.getElementById('editCostCustomer');
+    if (costEl) costEl.value = trip.costCustomer ?? '';
+
+    const tollEl = document.getElementById('editTollExpense');
+    if (tollEl) tollEl.value = trip.tollExpense ?? '0';
+
+    const fuelEl = document.getElementById('editFuelExpense');
+    if (fuelEl) fuelEl.value = trip.fuelExpense ?? '';
+
+    const otherEl = document.getElementById('editOtherExpense');
+    if (otherEl) otherEl.value = trip.otherExpense ?? '';
+
+    const noteEl = document.getElementById('editOtherNote');
+    if (noteEl) noteEl.value = trip.otherNote || '';
+
+    // Photo previews
+    const startPrev = document.getElementById('editStartPhotoPreview');
+    if (startPrev) {
+      if (trip.startOdoPhoto) {
+        startPrev.src = trip.startOdoPhoto;
+        startPrev.style.display = 'block';
+      } else {
+        startPrev.style.display = 'none';
+      }
+    }
+
+    const endPrev = document.getElementById('editEndPhotoPreview');
+    if (endPrev) {
+      if (trip.endOdoPhoto) {
+        endPrev.src = trip.endOdoPhoto;
+        endPrev.style.display = 'block';
+      } else {
+        endPrev.style.display = 'none';
+      }
+    }
+
+    // Populate Extra Charges
+    const hasWaiting = (parseFloat(trip.waitingCharge) > 0 || parseFloat(trip.waitingDuration) > 0);
+    const hasParking = (parseFloat(trip.parkingCharge) > 0);
+    const hasExtraKm = (parseFloat(trip.extraKm) > 0 || parseFloat(trip.extraKmCharge) > 0);
+
+    const editWaitingUnit = document.getElementById('editWaitingUnit');
+    if (editWaitingUnit) editWaitingUnit.value = trip.waitingUnit || 'hours';
+
+    const editWaitingDuration = document.getElementById('editWaitingDuration');
+    if (editWaitingDuration) editWaitingDuration.value = trip.waitingDuration || '';
+
+    const editWaitingRate = document.getElementById('editWaitingRate');
+    if (editWaitingRate) editWaitingRate.value = trip.waitingRate || 100;
+
+    const editWaitingCharge = document.getElementById('editWaitingCharge');
+    if (editWaitingCharge) editWaitingCharge.value = trip.waitingCharge ?? 0;
+
+    const editParkingCharge = document.getElementById('editParkingCharge');
+    if (editParkingCharge) editParkingCharge.value = trip.parkingCharge ?? 0;
+
+    const editExtraKm = document.getElementById('editExtraKm');
+    if (editExtraKm) editExtraKm.value = trip.extraKm || '';
+
+    const editExtraKmRate = document.getElementById('editExtraKmRate');
+    if (editExtraKmRate) editExtraKmRate.value = trip.extraKmRate || 11;
+
+    const editExtraKmCharge = document.getElementById('editExtraKmCharge');
+    if (editExtraKmCharge) editExtraKmCharge.value = trip.extraKmCharge ?? 0;
+
+    this.toggleExtraSection('edit', 'waiting', hasWaiting);
+    this.toggleExtraSection('edit', 'parking', hasParking);
+    this.toggleExtraSection('edit', 'extraKm', hasExtraKm);
+
+    this.calcEditLiveTally();
+
+    // Listen to odo inputs inside modal for instant driven calculation
+    startOdoEl.oninput = () => this.calcEditLiveTally();
+    endOdoEl.oninput = () => this.calcEditLiveTally();
+
+    const modal = document.getElementById('editTripModal');
+    if (modal) modal.classList.add('active');
+  }
+
+  calcEditLiveTally() {
+    const startOdo = parseFloat(document.getElementById('editStartOdo')?.value) || 0;
+    const endOdo = parseFloat(document.getElementById('editEndOdo')?.value) || 0;
+    const charged = parseFloat(document.getElementById('editCostCustomer')?.value) || 0;
+    const toll = parseFloat(document.getElementById('editTollExpense')?.value) || 0;
+    const fuel = parseFloat(document.getElementById('editFuelExpense')?.value) || 0;
+    const other = parseFloat(document.getElementById('editOtherExpense')?.value) || 0;
+
+    let driven = 0;
+    if (endOdo > 0 && startOdo > 0 && endOdo >= startOdo) {
+      driven = (endOdo - startOdo).toFixed(1);
+    }
+
+    const totalExp = fuel + toll + other;
+    const profit = charged - totalExp;
+
+    const drivenText = document.getElementById('editModalDrivenText');
+    const profitText = document.getElementById('editModalProfitText');
+    const breakdownText = document.getElementById('editModalBreakdownText');
+
+    if (drivenText) drivenText.textContent = `Driven: ${driven} KM`;
+    if (profitText) {
+      profitText.textContent = `Net Profit: ₹${profit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      profitText.style.color = profit >= 0 ? 'var(--success-dark)' : 'var(--danger)';
+    }
+    if (breakdownText) {
+      breakdownText.textContent = `Charged: ₹${charged.toFixed(2)} | Fuel+Toll+Other: ₹${totalExp.toFixed(2)}`;
+    }
+  }
+
+  // ─── END TRIP MODAL ───
+  openEndTripModal(tripId) {
+    this.activeEndingTripId = tripId;
+    const trip = this.data.trips.find(t => t.id === tripId);
+    if (!trip) return;
+
+    this.tempEndPhoto = '';
+    const endOdoInput = document.getElementById('endOdoInput');
+    const costCustomerEndInput = document.getElementById('costCustomerEndInput');
+    const endPreview = document.getElementById('endOdoPreview');
+    const banner = document.getElementById('endTripCalcBanner');
+    const startOdoDisp = document.getElementById('endModalStartOdoDisplay');
+    const drivenKmDisp = document.getElementById('endModalDrivenKmDisplay');
+    const mileageDisp = document.getElementById('endModalMileageDisplay');
+
+    if (endPreview) endPreview.style.display = 'none';
+
+    if (endOdoInput) {
+      endOdoInput.value = trip.startOdo ? (parseFloat(trip.startOdo) + 50) : '';
+    }
+    if (costCustomerEndInput) {
+      costCustomerEndInput.value = trip.costCustomer || '';
+    }
+
+    const updateLiveCalc = () => {
+      const startOdo = parseFloat(trip.startOdo) || 0;
+      const endOdo = parseFloat(endOdoInput?.value) || 0;
+
+      if (startOdo > 0 && endOdo >= startOdo) {
+        const driven = (endOdo - startOdo).toFixed(1);
+        if (startOdoDisp) startOdoDisp.textContent = `Start Odo: ${startOdo} KM`;
+        if (drivenKmDisp) drivenKmDisp.textContent = `Driven: ${driven} KM`;
+
+        if (trip.fuelExpense > 0) {
+          const liters = trip.fuelExpense / 100;
+          const mileage = (parseFloat(driven) / liters).toFixed(1);
+          if (mileageDisp) mileageDisp.innerHTML = `<i class="fas fa-gas-pump"></i> Fuel: ₹${trip.fuelExpense.toFixed(2)} | Mileage: <strong>${mileage} KM/L</strong>`;
+        } else {
+          if (mileageDisp) mileageDisp.innerHTML = `<i class="fas fa-gas-pump"></i> Fuel: ₹0.00 | Mileage: --`;
+        }
+
+        if (banner) banner.style.display = 'flex';
+      } else {
+        if (banner) banner.style.display = 'none';
+      }
+    };
+
+    if (endOdoInput) {
+      endOdoInput.removeEventListener('input', updateLiveCalc);
+      endOdoInput.addEventListener('input', updateLiveCalc);
+      updateLiveCalc();
+    }
+
+    const modal = document.getElementById('endTripModal');
+    if (modal) modal.classList.add('active');
+  }
+
+  closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('active');
+  }
+
+  // ─── REPORTS & FILTER SYSTEM ───
   refreshMonthFilterDropdown() {
     const filterMonthVal = document.getElementById('reportFilterMonth');
     if (filterMonthVal) {
@@ -548,6 +1106,7 @@ class TravelsApp {
     return '₹' + parseFloat(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  // ─── RENDER RECENT TRIPS (TRIP ENTRY PAGE) ───
   renderRecentTrips() {
     const container = document.getElementById('recentTripsList');
     if (!container) return;
@@ -564,6 +1123,12 @@ class TravelsApp {
       const other = parseFloat(t.otherExpense || 0);
       const profit = charged - (fuel + toll + other);
       const isCompleted = t.status === 'completed';
+
+      // Extra badges
+      const waiting = parseFloat(t.waitingCharge || 0);
+      const parking = parseFloat(t.parkingCharge || 0);
+      const extraKm = parseFloat(t.extraKmCharge || 0);
+      const hasExtras = (waiting > 0 || parking > 0 || extraKm > 0);
 
       return `
         <div class="trip-card">
@@ -584,6 +1149,14 @@ class TravelsApp {
             ${(isCompleted && t.distanceKm > 0 && t.fuelExpense > 0) ? ` | Mileage: <strong>${(t.distanceKm / (t.fuelExpense / 100)).toFixed(1)} KM/L</strong>` : ''}
           </div>
 
+          ${hasExtras ? `
+            <div class="trip-extras-badge">
+              ${waiting > 0 ? `<span class="extra-tag">⏳ Waiting: ₹${waiting.toFixed(2)} (${t.waitingDuration} ${t.waitingUnit || 'hrs'})</span>` : ''}
+              ${parking > 0 ? `<span class="extra-tag">🅿️ Parking: ₹${parking.toFixed(2)}</span>` : ''}
+              ${extraKm > 0 ? `<span class="extra-tag">🛣️ Extra KM: ₹${extraKm.toFixed(2)} (${t.extraKm} KM @ ₹${t.extraKmRate || 11})</span>` : ''}
+            </div>
+          ` : ''}
+
           <div class="trip-costs">
             <div>Charged: <strong>${this.formatINR(charged)}</strong></div>
             <div>Fuel: <strong>${this.formatINR(fuel)}</strong></div>
@@ -600,14 +1173,19 @@ class TravelsApp {
             </div>
           ` : ''}
 
-          <div style="display:flex; justify-space-between; align-items:center; margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
-            ${!isCompleted ? `
-              <button class="btn-primary btn-success btn-sm" onclick="app.openEndTripModal('${t.id}')">
-                <i class="fas fa-flag-checkered"></i> Complete Trip
+          <div class="trip-card-actions">
+            <div style="display:flex; gap:6px;">
+              ${!isCompleted ? `
+                <button class="btn-primary btn-success btn-sm" onclick="app.openEndTripModal('${t.id}')">
+                  <i class="fas fa-flag-checkered"></i> Complete
+                </button>
+              ` : ''}
+              <button class="btn-action-edit" onclick="app.openEditTripModal('${t.id}')">
+                <i class="fas fa-pen"></i> Edit
               </button>
-            ` : '<div></div>'}
+            </div>
             
-            <button style="background:none; border:none; color:var(--danger); font-size:12px; font-weight:600; cursor:pointer;" onclick="app.deleteTrip('${t.id}')">
+            <button class="btn-action-delete" onclick="app.deleteTrip('${t.id}')">
               <i class="fas fa-trash"></i> Delete
             </button>
           </div>
@@ -616,67 +1194,90 @@ class TravelsApp {
     }).join('');
   }
 
-  openEndTripModal(tripId) {
-    this.activeEndingTripId = tripId;
-    const trip = this.data.trips.find(t => t.id === tripId);
-    if (!trip) return;
+  // ─── RENDER REPORT VIEW (PAGE 2) ───
+  renderReportView() {
+    const report = getFilteredReportData(this.data.trips, this.reportFilterType, this.reportFilterVal, this.reportSearchQuery);
 
-    this.tempEndPhoto = '';
-    const endOdoInput = document.getElementById('endOdoInput');
-    const costCustomerEndInput = document.getElementById('costCustomerEndInput');
-    const endPreview = document.getElementById('endOdoPreview');
-    const banner = document.getElementById('endTripCalcBanner');
-    const startOdoDisp = document.getElementById('endModalStartOdoDisplay');
-    const drivenKmDisp = document.getElementById('endModalDrivenKmDisplay');
-    const mileageDisp = document.getElementById('endModalMileageDisplay');
+    const elEarnings = document.getElementById('repTotalEarnings');
+    const elExpenses = document.getElementById('repTotalExpenses');
+    const elKm = document.getElementById('repTotalKm');
+    const elProfit = document.getElementById('repNetProfit');
 
-    if (endPreview) endPreview.style.display = 'none';
+    if (elEarnings) elEarnings.textContent = this.formatINR(report.totalCostCustomers);
+    if (elExpenses) elExpenses.textContent = this.formatINR(report.totalExpenses);
+    if (elKm) elKm.textContent = `${report.totalKm.toLocaleString('en-IN')} KM`;
+    if (elProfit) elProfit.textContent = this.formatINR(report.netProfit);
 
-    if (endOdoInput) {
-      endOdoInput.value = trip.startOdo ? (parseFloat(trip.startOdo) + 50) : '';
+    renderReportCharts(report.filteredTrips);
+
+    const container = document.getElementById('reportMonthlyList');
+    if (!container) return;
+
+    if (report.filteredTrips.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">No records match current filter.</div>`;
+      return;
     }
-    if (costCustomerEndInput) {
-      costCustomerEndInput.value = trip.costCustomer || '';
-    }
 
-    const updateLiveCalc = () => {
-      const startOdo = parseFloat(trip.startOdo) || 0;
-      const endOdo = parseFloat(endOdoInput?.value) || 0;
+    container.innerHTML = report.filteredTrips.map(t => {
+      const charged = parseFloat(t.costCustomer || 0);
+      const fuel = parseFloat(t.fuelExpense || 0);
+      const toll = parseFloat(t.tollExpense || 0);
+      const other = parseFloat(t.otherExpense || 0);
+      const exp = fuel + toll + other;
+      const profit = charged - exp;
+      const km = parseFloat(t.distanceKm || 0);
 
-      if (startOdo > 0 && endOdo >= startOdo) {
-        const driven = (endOdo - startOdo).toFixed(1);
-        if (startOdoDisp) startOdoDisp.textContent = `Start Odo: ${startOdo} KM`;
-        if (drivenKmDisp) drivenKmDisp.textContent = `Driven: ${driven} KM`;
+      const waiting = parseFloat(t.waitingCharge || 0);
+      const parking = parseFloat(t.parkingCharge || 0);
+      const extraKm = parseFloat(t.extraKmCharge || 0);
+      const hasExtras = (waiting > 0 || parking > 0 || extraKm > 0);
 
-        if (trip.fuelExpense > 0) {
-          const liters = trip.fuelExpense / 100;
-          const mileage = (parseFloat(driven) / liters).toFixed(1);
-          if (mileageDisp) mileageDisp.innerHTML = `<i class="fas fa-gas-pump"></i> Fuel: ₹${trip.fuelExpense.toFixed(2)} | Mileage: <strong>${mileage} KM/L</strong>`;
-        } else {
-          if (mileageDisp) mileageDisp.innerHTML = `<i class="fas fa-gas-pump"></i> Fuel: ₹0.00 | Mileage: --`;
-        }
-
-        if (banner) banner.style.display = 'flex';
-      } else {
-        if (banner) banner.style.display = 'none';
+      let mileageText = '';
+      if (km > 0 && fuel > 0) {
+        mileageText = ` | Mileage: <strong>${(km / (fuel / 100)).toFixed(1)} KM/L</strong>`;
       }
-    };
 
-    if (endOdoInput) {
-      endOdoInput.removeEventListener('input', updateLiveCalc);
-      endOdoInput.addEventListener('input', updateLiveCalc);
-      updateLiveCalc();
-    }
+      return `
+        <div class="trip-card">
+          <div style="display:flex; justify-content:space-between; font-weight:700; font-size:13px; margin-bottom:4px;">
+            <span>${t.date} (${t.startTime}) ${t.customerName ? '| ' + t.customerName : ''}</span>
+            <span style="color:var(--primary); font-size:14px;">Charged: ${this.formatINR(charged)}</span>
+          </div>
+          <div style="font-weight:800; font-size:15px; margin-bottom:4px; color:var(--text-main);">${t.fromPlace} &rarr; ${t.toPlace}</div>
+          
+          <div style="font-size:12px; color:var(--text-sub); background:#F8FAFC; padding:6px 8px; border-radius:6px; margin-bottom:6px;">
+            Start Odo: <strong>${t.startOdo || 0} KM</strong> | End Odo: <strong>${t.endOdo || 0} KM</strong> | Driven: <strong>${km} KM</strong>${mileageText}
+          </div>
 
-    const modal = document.getElementById('endTripModal');
-    if (modal) modal.classList.add('active');
+          ${hasExtras ? `
+            <div class="trip-extras-badge" style="margin-bottom:6px;">
+              ${waiting > 0 ? `<span class="extra-tag">⏳ Waiting: ₹${waiting.toFixed(2)}</span>` : ''}
+              ${parking > 0 ? `<span class="extra-tag">🅿️ Parking: ₹${parking.toFixed(2)}</span>` : ''}
+              ${extraKm > 0 ? `<span class="extra-tag">🛣️ Extra KM: ₹${extraKm.toFixed(2)} (${t.extraKm} KM)</span>` : ''}
+            </div>
+          ` : ''}
+
+          <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-sub); flex-wrap:wrap; gap:4px; margin-bottom:8px;">
+            <span>Fuel: ${this.formatINR(fuel)}</span>
+            <span>FASTag Toll: ${this.formatINR(toll)}</span>
+            <span>Other: ${this.formatINR(other)}</span>
+            <strong style="color:${profit >= 0 ? 'var(--success-dark)' : 'var(--danger)'};">Net Profit: ${this.formatINR(profit)}</strong>
+          </div>
+
+          <div class="trip-card-actions">
+            <button class="btn-action-edit" onclick="app.openEditTripModal('${t.id}')">
+              <i class="fas fa-pen"></i> Edit Order
+            </button>
+            <button class="btn-action-delete" onclick="app.deleteTrip('${t.id}')">
+              <i class="fas fa-trash"></i> Delete
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
-  closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) modal.classList.remove('active');
-  }
-
+  // ─── CALENDAR VIEW ───
   renderCalendarView() {
     const container = document.getElementById('calendarGridContainer');
     if (!container) return;
@@ -741,9 +1342,14 @@ class TravelsApp {
 
         return `
           <div style="background:#F8FAFC; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid #E2E8F0; font-size:12px;">
-            <div style="font-weight:700; color:var(--primary);">${t.fromPlace} &rarr; ${t.toPlace} (${t.startTime})</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight:700; color:var(--primary);">${t.fromPlace} &rarr; ${t.toPlace} (${t.startTime})</span>
+              <button class="btn-action-edit" style="padding:2px 8px; font-size:11px;" onclick="app.closeModal('dayDetailsModal'); app.openEditTripModal('${t.id}')">
+                <i class="fas fa-pen"></i> Edit
+              </button>
+            </div>
             <div>Customer: ${t.customerName || 'N/A'} | Odo: ${t.startOdo || 0} to ${t.endOdo || 0} (${t.distanceKm || 0} KM)</div>
-            <div>Charged: ₹${rev.toFixed(2)} | Fuel+Toll: ₹${exp.toFixed(2)} | <strong style="color:var(--success-dark);">Profit: ₹${profit.toFixed(2)}</strong></div>
+            <div>Charged: ₹${rev.toFixed(2)} | Expenses: ₹${exp.toFixed(2)} | <strong style="color:var(--success-dark);">Profit: ₹${profit.toFixed(2)}</strong></div>
           </div>
         `;
       }).join('');
@@ -783,76 +1389,16 @@ class TravelsApp {
     this.showToast(`📥 Daily Excel/CSV for ${dateStr} downloaded!`, 'info');
   }
 
-  renderReportView() {
-    const report = getFilteredReportData(this.data.trips, this.reportFilterType, this.reportFilterVal, this.reportSearchQuery);
-
-    const elEarnings = document.getElementById('repTotalEarnings');
-    const elExpenses = document.getElementById('repTotalExpenses');
-    const elKm = document.getElementById('repTotalKm');
-    const elProfit = document.getElementById('repNetProfit');
-
-    if (elEarnings) elEarnings.textContent = this.formatINR(report.totalCostCustomers);
-    if (elExpenses) elExpenses.textContent = this.formatINR(report.totalExpenses);
-    if (elKm) elKm.textContent = `${report.totalKm.toLocaleString('en-IN')} KM`;
-    if (elProfit) elProfit.textContent = this.formatINR(report.netProfit);
-
-    renderReportCharts(report.filteredTrips);
-
-    const container = document.getElementById('reportMonthlyList');
-    if (!container) return;
-
-    if (report.filteredTrips.length === 0) {
-      container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted);">No records match current filter.</div>`;
-      return;
-    }
-
-    container.innerHTML = report.filteredTrips.map(t => {
-      const charged = parseFloat(t.costCustomer || 0);
-      const fuel = parseFloat(t.fuelExpense || 0);
-      const toll = parseFloat(t.tollExpense || 0);
-      const other = parseFloat(t.otherExpense || 0);
-      const exp = fuel + toll + other;
-      const profit = charged - exp;
-      const km = parseFloat(t.distanceKm || 0);
-
-      let mileageText = '';
-      if (km > 0 && fuel > 0) {
-        mileageText = ` | Mileage: <strong>${(km / (fuel / 100)).toFixed(1)} KM/L</strong>`;
-      }
-
-      return `
-        <div class="trip-card">
-          <div style="display:flex; justify-content:space-between; font-weight:700; font-size:13px; margin-bottom:4px;">
-            <span>${t.date} (${t.startTime}) ${t.customerName ? '| ' + t.customerName : ''}</span>
-            <span style="color:var(--primary); font-size:14px;">Charged: ${this.formatINR(charged)}</span>
-          </div>
-          <div style="font-weight:800; font-size:15px; margin-bottom:4px; color:var(--text-main);">${t.fromPlace} &rarr; ${t.toPlace}</div>
-          
-          <div style="font-size:12px; color:var(--text-sub); background:#F8FAFC; padding:6px 8px; border-radius:6px; margin-bottom:6px;">
-            Start Odo: <strong>${t.startOdo || 0} KM</strong> | End Odo: <strong>${t.endOdo || 0} KM</strong> | Driven: <strong>${km} KM</strong>${mileageText}
-          </div>
-
-          <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-sub); flex-wrap:wrap; gap:4px;">
-            <span>Fuel: ${this.formatINR(fuel)}</span>
-            <span>FASTag Toll: ${this.formatINR(toll)}</span>
-            <span>Other: ${this.formatINR(other)}</span>
-            <strong style="color:${profit >= 0 ? 'var(--success-dark)' : 'var(--danger)'};">Net Profit: ${this.formatINR(profit)}</strong>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
   async deleteTrip(id) {
     if (confirm("Delete this trip order?")) {
       this.data.trips = this.data.trips.filter(t => t.id !== id);
       this.saveLocalData();
 
-      // Delete from SQLite API backend
+      // Delete from backend API
       try {
         await fetch(`${this.apiBaseUrl}/${id}`, { method: 'DELETE' });
       } catch (err) {
-        console.warn("Could not delete from backend API server:", err);
+        console.warn("Could not delete from backend server:", err);
       }
 
       this.refreshMonthFilterDropdown();

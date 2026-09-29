@@ -44,6 +44,13 @@ function initDatabase() {
       tollExpense REAL DEFAULT 0,
       otherExpense REAL DEFAULT 0,
       otherNote TEXT,
+      waitingCharge REAL DEFAULT 0,
+      waitingDuration REAL DEFAULT 0,
+      waitingUnit TEXT DEFAULT 'hours',
+      parkingCharge REAL DEFAULT 0,
+      extraKm REAL DEFAULT 0,
+      extraKmRate REAL DEFAULT 11,
+      extraKmCharge REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `;
@@ -53,6 +60,19 @@ function initDatabase() {
       console.error('Error creating trips table:', err.message);
     } else {
       console.log('Trips table initialized.');
+      // Auto-migrate columns if table already existed without them
+      const columnsToAdd = [
+        'waitingCharge REAL DEFAULT 0',
+        'waitingDuration REAL DEFAULT 0',
+        'waitingUnit TEXT DEFAULT \'hours\'',
+        'parkingCharge REAL DEFAULT 0',
+        'extraKm REAL DEFAULT 0',
+        'extraKmRate REAL DEFAULT 11',
+        'extraKmCharge REAL DEFAULT 0'
+      ];
+      columnsToAdd.forEach(colDef => {
+        db.run(`ALTER TABLE trips ADD COLUMN ${colDef}`, () => {});
+      });
       seedInitialData();
     }
   });
@@ -80,6 +100,13 @@ function seedInitialData() {
         tollExpense: 220.00,
         otherExpense: 100.00,
         otherNote: 'Refreshment',
+        waitingCharge: 0,
+        waitingDuration: 0,
+        waitingUnit: 'hours',
+        parkingCharge: 0,
+        extraKm: 0,
+        extraKmRate: 11,
+        extraKmCharge: 0,
         startOdoPhoto: '',
         endOdoPhoto: ''
       };
@@ -88,8 +115,10 @@ function seedInitialData() {
         INSERT INTO trips (
           id, status, date, startTime, customerName, fromPlace, toPlace,
           distanceKm, startOdo, startOdoPhoto, endOdo, endOdoPhoto,
-          costCustomer, fuelExpense, tollExpense, otherExpense, otherNote
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          costCustomer, fuelExpense, tollExpense, otherExpense, otherNote,
+          waitingCharge, waitingDuration, waitingUnit, parkingCharge,
+          extraKm, extraKmRate, extraKmCharge
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       db.run(sql, [
@@ -97,7 +126,9 @@ function seedInitialData() {
         seedTrip.customerName, seedTrip.fromPlace, seedTrip.toPlace,
         seedTrip.distanceKm, seedTrip.startOdo, seedTrip.startOdoPhoto,
         seedTrip.endOdo, seedTrip.endOdoPhoto, seedTrip.costCustomer,
-        seedTrip.fuelExpense, seedTrip.tollExpense, seedTrip.otherExpense, seedTrip.otherNote
+        seedTrip.fuelExpense, seedTrip.tollExpense, seedTrip.otherExpense, seedTrip.otherNote,
+        seedTrip.waitingCharge, seedTrip.waitingDuration, seedTrip.waitingUnit, seedTrip.parkingCharge,
+        seedTrip.extraKm, seedTrip.extraKmRate, seedTrip.extraKmCharge
       ], (insertErr) => {
         if (insertErr) console.error('Error seeding initial trip:', insertErr.message);
         else console.log('Initial seed trip created successfully.');
@@ -159,8 +190,10 @@ app.post('/api/trips', (req, res) => {
     INSERT INTO trips (
       id, status, date, startTime, customerName, fromPlace, toPlace,
       distanceKm, startOdo, startOdoPhoto, endOdo, endOdoPhoto,
-      costCustomer, fuelExpense, tollExpense, otherExpense, otherNote
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      costCustomer, fuelExpense, tollExpense, otherExpense, otherNote,
+      waitingCharge, waitingDuration, waitingUnit, parkingCharge,
+      extraKm, extraKmRate, extraKmCharge
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -180,7 +213,14 @@ app.post('/api/trips', (req, res) => {
     parseFloat(trip.fuelExpense || 0),
     parseFloat(trip.tollExpense || 0),
     parseFloat(trip.otherExpense || 0),
-    trip.otherNote || ''
+    trip.otherNote || '',
+    parseFloat(trip.waitingCharge || 0),
+    parseFloat(trip.waitingDuration || 0),
+    trip.waitingUnit || 'hours',
+    parseFloat(trip.parkingCharge || 0),
+    parseFloat(trip.extraKm || 0),
+    parseFloat(trip.extraKmRate || 11),
+    parseFloat(trip.extraKmCharge || 0)
   ];
 
   db.run(sql, params, function (err) {
@@ -216,7 +256,14 @@ app.put('/api/trips/:id', (req, res) => {
       fuelExpense = COALESCE(?, fuelExpense),
       tollExpense = COALESCE(?, tollExpense),
       otherExpense = COALESCE(?, otherExpense),
-      otherNote = COALESCE(?, otherNote)
+      otherNote = COALESCE(?, otherNote),
+      waitingCharge = COALESCE(?, waitingCharge),
+      waitingDuration = COALESCE(?, waitingDuration),
+      waitingUnit = COALESCE(?, waitingUnit),
+      parkingCharge = COALESCE(?, parkingCharge),
+      extraKm = COALESCE(?, extraKm),
+      extraKmRate = COALESCE(?, extraKmRate),
+      extraKmCharge = COALESCE(?, extraKmCharge)
     WHERE id = ?
   `;
 
@@ -237,6 +284,13 @@ app.put('/api/trips/:id', (req, res) => {
     trip.tollExpense,
     trip.otherExpense,
     trip.otherNote,
+    trip.waitingCharge,
+    trip.waitingDuration,
+    trip.waitingUnit,
+    trip.parkingCharge,
+    trip.extraKm,
+    trip.extraKmRate,
+    trip.extraKmCharge,
     id
   ];
 
