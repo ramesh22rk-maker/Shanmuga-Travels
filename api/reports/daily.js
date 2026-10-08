@@ -1,10 +1,7 @@
 // api/reports/daily.js
 // GET /api/reports/daily?date=YYYY-MM-DD
 
-const { Redis } = require('@upstash/redis');
-
-const redis = Redis.fromEnv();
-const TRIPS_KEY = 'shanmuga_travels_trips';
+const { getSupabaseClient, normalizeTrip } = require('../supabase');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,25 +11,38 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return res.status(500).json({
+      error: 'Supabase credentials missing. Please configure SUPABASE_URL and SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY.'
+    });
+  }
+
   try {
     const targetDate = req.query.date || new Date().toISOString().split('T')[0];
 
-    let allTrips = await redis.get(TRIPS_KEY);
-    if (!allTrips) allTrips = [];
+    const { data: trips, error } = await supabase
+      .from('trips')
+      .select('*')
+      .eq('date', targetDate)
+      .order('date', { ascending: false });
 
-    const trips = allTrips.filter(t => t.date === targetDate);
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
 
-    const totalCharged  = trips.reduce((s, t) => s + parseFloat(t.costCustomer || 0), 0);
-    const totalFuel     = trips.reduce((s, t) => s + parseFloat(t.fuelExpense || 0), 0);
-    const totalTolls    = trips.reduce((s, t) => s + parseFloat(t.tollExpense || 0), 0);
-    const totalOther    = trips.reduce((s, t) => s + parseFloat(t.otherExpense || 0), 0);
+    const tripList = (trips || []).map(normalizeTrip);
+    const totalCharged  = tripList.reduce((s, t) => s + parseFloat(t.costCustomer || 0), 0);
+    const totalFuel     = tripList.reduce((s, t) => s + parseFloat(t.fuelExpense || 0), 0);
+    const totalTolls    = tripList.reduce((s, t) => s + parseFloat(t.tollExpense || 0), 0);
+    const totalOther    = tripList.reduce((s, t) => s + parseFloat(t.otherExpense || 0), 0);
     const totalExpenses = totalFuel + totalTolls + totalOther;
-    const totalKm       = trips.reduce((s, t) => s + parseFloat(t.distanceKm || 0), 0);
+    const totalKm       = tripList.reduce((s, t) => s + parseFloat(t.distanceKm || 0), 0);
     const netProfit     = totalCharged - totalExpenses;
 
     return res.status(200).json({
       date: targetDate,
-      tripCount: trips.length,
+      tripCount: tripList.length,
       totalCharged,
       totalFuel,
       totalTolls,
@@ -40,7 +50,7 @@ module.exports = async function handler(req, res) {
       totalExpenses,
       totalKm,
       netProfit,
-      trips
+      trips: tripList
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
