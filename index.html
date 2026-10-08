@@ -143,6 +143,15 @@
                 <button type="button" class="btn-extra-pill" id="startToggleExtraKmBtn" onclick="app.toggleExtraSection('start', 'extraKm')">
                   <i class="fas fa-road"></i> Extra KM <span class="pill-plus"><i class="fas fa-plus"></i></span>
                 </button>
+                <button type="button" class="btn-extra-pill" id="startToggleCngBtn" onclick="app.toggleExtraSection('start', 'cng')">
+                  <i class="fas fa-burn"></i> CNG <span class="pill-plus"><i class="fas fa-plus"></i></span>
+                </button>
+                <button type="button" class="btn-extra-pill" id="startTogglePetrolBtn" onclick="app.toggleExtraSection('start', 'petrol')">
+                  <i class="fas fa-gas-pump"></i> Petrol <span class="pill-plus"><i class="fas fa-plus"></i></span>
+                </button>
+                <button type="button" class="btn-extra-pill" id="startToggleServiceBtn" onclick="app.toggleExtraSection('start', 'service')">
+                  <i class="fas fa-tools"></i> Service <span class="pill-plus"><i class="fas fa-plus"></i></span>
+                </button>
               </div>
             </div>
 
@@ -211,6 +220,42 @@
                 <input type="number" step="0.01" min="0" name="extraKmCharge" id="startExtraKmCharge" class="input-field" value="0" placeholder="0.00" oninput="app.updateExtrasSubtotal('start')">
               </div>
               <div class="extra-hint" id="startExtraKmHint">⚡ Extra KM @ ₹11/KM (e.g. 10 KM × ₹11 = ₹110)</div>
+            </div>
+
+            <!-- 4. CNG Charge Box -->
+            <div class="extra-card-panel" id="startExtraCngBox" style="display:none;">
+              <div class="extra-panel-head">
+                <div class="extra-panel-title"><i class="fas fa-burn" style="color:#0EA5E9;"></i> CNG Charges</div>
+                <button type="button" class="btn-close-extra" onclick="app.toggleExtraSection('start', 'cng', false)">&times;</button>
+              </div>
+              <div class="form-group">
+                <label>CNG Amount (₹)</label>
+                <input type="number" step="0.01" min="0" name="cngCharge" id="startCngCharge" class="input-field" value="0" placeholder="Enter CNG amount e.g. 500" oninput="app.updateExtrasSubtotal('start')">
+              </div>
+            </div>
+
+            <!-- 5. Petrol Charge Box -->
+            <div class="extra-card-panel" id="startExtraPetrolBox" style="display:none;">
+              <div class="extra-panel-head">
+                <div class="extra-panel-title"><i class="fas fa-gas-pump" style="color:#EF4444;"></i> Petrol Charges</div>
+                <button type="button" class="btn-close-extra" onclick="app.toggleExtraSection('start', 'petrol', false)">&times;</button>
+              </div>
+              <div class="form-group">
+                <label>Petrol Amount (₹)</label>
+                <input type="number" step="0.01" min="0" name="petrolCharge" id="startPetrolCharge" class="input-field" value="0" placeholder="Enter Petrol amount e.g. 500" oninput="app.updateExtrasSubtotal('start')">
+              </div>
+            </div>
+
+            <!-- 6. Service Charge Box -->
+            <div class="extra-card-panel" id="startExtraServiceBox" style="display:none;">
+              <div class="extra-panel-head">
+                <div class="extra-panel-title"><i class="fas fa-tools" style="color:#8B5CF6;"></i> Service Charges</div>
+                <button type="button" class="btn-close-extra" onclick="app.toggleExtraSection('start', 'service', false)">&times;</button>
+              </div>
+              <div class="form-group">
+                <label>Service Amount (₹)</label>
+                <input type="number" step="0.01" min="0" name="serviceCharge" id="startServiceCharge" class="input-field" value="0" placeholder="Enter Service amount e.g. 300" oninput="app.updateExtrasSubtotal('start')">
+              </div>
             </div>
 
             <!-- Addons Total Banner -->
@@ -504,6 +549,15 @@
               <button type="button" class="btn-extra-pill" id="editToggleExtraKmBtn" onclick="app.toggleExtraSection('edit', 'extraKm')">
                 <i class="fas fa-road"></i> Extra KM <span class="pill-plus"><i class="fas fa-plus"></i></span>
               </button>
+              <button type="button" class="btn-extra-pill" id="editToggleCngBtn" onclick="app.toggleExtraSection('edit', 'cng')">
+                <i class="fas fa-burn"></i> CNG <span class="pill-plus"><i class="fas fa-plus"></i></span>
+              </button>
+              <button type="button" class="btn-extra-pill" id="editTogglePetrolBtn" onclick="app.toggleExtraSection('edit', 'petrol')">
+                <i class="fas fa-gas-pump"></i> Petrol <span class="pill-plus"><i class="fas fa-plus"></i></span>
+              </button>
+              <button type="button" class="btn-extra-pill" id="editToggleServiceBtn" onclick="app.toggleExtraSection('edit', 'service')">
+                <i class="fas fa-tools"></i> Service <span class="pill-plus"><i class="fas fa-plus"></i></span>
+              </button>
             </div>
           </div>
 
@@ -569,6 +623,42 @@
             <div class="form-group">
               <label>Extra KM Amount (₹)</label>
               <input type="number" step="0.01" min="0" name="extraKmCharge" id="editExtraKmCharge" class="input-field" value="0" placeholder="0.00" oninput="app.updateExtrasSubtotal('edit')">
+            </div>
+          </div>
+
+          <!-- Edit CNG Panel -->
+          <div class="extra-card-panel" id="editExtraCngBox" style="display:none;">
+            <div class="extra-panel-head">
+              <div class="extra-panel-title"><i class="fas fa-burn" style="color:#0EA5E9;"></i> CNG Charges</div>
+              <button type="button" class="btn-close-extra" onclick="app.toggleExtraSection('edit', 'cng', false)">&times;</button>
+            </div>
+            <div class="form-group">
+              <label>CNG Amount (₹)</label>
+              <input type="number" step="0.01" min="0" name="cngCharge" id="editCngCharge" class="input-field" value="0" placeholder="0.00" oninput="app.updateExtrasSubtotal('edit')">
+            </div>
+          </div>
+
+          <!-- Edit Petrol Panel -->
+          <div class="extra-card-panel" id="editExtraPetrolBox" style="display:none;">
+            <div class="extra-panel-head">
+              <div class="extra-panel-title"><i class="fas fa-gas-pump" style="color:#EF4444;"></i> Petrol Charges</div>
+              <button type="button" class="btn-close-extra" onclick="app.toggleExtraSection('edit', 'petrol', false)">&times;</button>
+            </div>
+            <div class="form-group">
+              <label>Petrol Amount (₹)</label>
+              <input type="number" step="0.01" min="0" name="petrolCharge" id="editPetrolCharge" class="input-field" value="0" placeholder="0.00" oninput="app.updateExtrasSubtotal('edit')">
+            </div>
+          </div>
+
+          <!-- Edit Service Panel -->
+          <div class="extra-card-panel" id="editExtraServiceBox" style="display:none;">
+            <div class="extra-panel-head">
+              <div class="extra-panel-title"><i class="fas fa-tools" style="color:#8B5CF6;"></i> Service Charges</div>
+              <button type="button" class="btn-close-extra" onclick="app.toggleExtraSection('edit', 'service', false)">&times;</button>
+            </div>
+            <div class="form-group">
+              <label>Service Amount (₹)</label>
+              <input type="number" step="0.01" min="0" name="serviceCharge" id="editServiceCharge" class="input-field" value="0" placeholder="0.00" oninput="app.updateExtrasSubtotal('edit')">
             </div>
           </div>
         </div>

@@ -69,7 +69,17 @@ const DEFAULT_DATA = {
       fuelExpense: 650.00,
       tollExpense: 220.00,
       otherExpense: 100.00,
-      otherNote: "Refreshment"
+      otherNote: "Refreshment",
+      waitingCharge: 0,
+      waitingDuration: 0,
+      waitingUnit: "hours",
+      parkingCharge: 0,
+      extraKm: 0,
+      extraKmRate: 11,
+      extraKmCharge: 0,
+      cngCharge: 0,
+      petrolCharge: 0,
+      serviceCharge: 0
     }
   ]
 };

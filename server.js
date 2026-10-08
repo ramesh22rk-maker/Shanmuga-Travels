@@ -52,6 +52,9 @@ function initDatabase() {
       extraKm REAL DEFAULT 0,
       extraKmRate REAL DEFAULT 11,
       extraKmCharge REAL DEFAULT 0,
+      cngCharge REAL DEFAULT 0,
+      petrolCharge REAL DEFAULT 0,
+      serviceCharge REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `;
@@ -69,7 +72,10 @@ function initDatabase() {
         'parkingCharge REAL DEFAULT 0',
         'extraKm REAL DEFAULT 0',
         'extraKmRate REAL DEFAULT 11',
-        'extraKmCharge REAL DEFAULT 0'
+        'extraKmCharge REAL DEFAULT 0',
+        'cngCharge REAL DEFAULT 0',
+        'petrolCharge REAL DEFAULT 0',
+        'serviceCharge REAL DEFAULT 0'
       ];
       columnsToAdd.forEach(colDef => {
         db.run(`ALTER TABLE trips ADD COLUMN ${colDef}`, () => {});
@@ -108,6 +114,9 @@ function seedInitialData() {
         extraKm: 0,
         extraKmRate: 11,
         extraKmCharge: 0,
+        cngCharge: 0,
+        petrolCharge: 0,
+        serviceCharge: 0,
         startOdoPhoto: '',
         endOdoPhoto: ''
       };
@@ -118,8 +127,9 @@ function seedInitialData() {
           distanceKm, startOdo, startOdoPhoto, endOdo, endOdoPhoto,
           costCustomer, fuelExpense, tollExpense, otherExpense, otherNote,
           waitingCharge, waitingDuration, waitingUnit, parkingCharge,
-          extraKm, extraKmRate, extraKmCharge
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          extraKm, extraKmRate, extraKmCharge,
+          cngCharge, petrolCharge, serviceCharge
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       db.run(sql, [
@@ -129,7 +139,8 @@ function seedInitialData() {
         seedTrip.endOdo, seedTrip.endOdoPhoto, seedTrip.costCustomer,
         seedTrip.fuelExpense, seedTrip.tollExpense, seedTrip.otherExpense, seedTrip.otherNote,
         seedTrip.waitingCharge, seedTrip.waitingDuration, seedTrip.waitingUnit, seedTrip.parkingCharge,
-        seedTrip.extraKm, seedTrip.extraKmRate, seedTrip.extraKmCharge
+        seedTrip.extraKm, seedTrip.extraKmRate, seedTrip.extraKmCharge,
+        seedTrip.cngCharge, seedTrip.petrolCharge, seedTrip.serviceCharge
       ], (insertErr) => {
         if (insertErr) console.error('Error seeding initial trip:', insertErr.message);
         else console.log('Initial seed trip created successfully.');
@@ -193,8 +204,9 @@ app.post('/api/trips', (req, res) => {
       distanceKm, startOdo, startOdoPhoto, endOdo, endOdoPhoto,
       costCustomer, fuelExpense, tollExpense, otherExpense, otherNote,
       waitingCharge, waitingDuration, waitingUnit, parkingCharge,
-      extraKm, extraKmRate, extraKmCharge
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      extraKm, extraKmRate, extraKmCharge,
+      cngCharge, petrolCharge, serviceCharge
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -221,7 +233,10 @@ app.post('/api/trips', (req, res) => {
     parseFloat(trip.parkingCharge || 0),
     parseFloat(trip.extraKm || 0),
     parseFloat(trip.extraKmRate || 11),
-    parseFloat(trip.extraKmCharge || 0)
+    parseFloat(trip.extraKmCharge || 0),
+    parseFloat(trip.cngCharge || 0),
+    parseFloat(trip.petrolCharge || 0),
+    parseFloat(trip.serviceCharge || 0)
   ];
 
   db.run(sql, params, function (err) {
@@ -264,7 +279,10 @@ app.put('/api/trips/:id', (req, res) => {
       parkingCharge = COALESCE(?, parkingCharge),
       extraKm = COALESCE(?, extraKm),
       extraKmRate = COALESCE(?, extraKmRate),
-      extraKmCharge = COALESCE(?, extraKmCharge)
+      extraKmCharge = COALESCE(?, extraKmCharge),
+      cngCharge = COALESCE(?, cngCharge),
+      petrolCharge = COALESCE(?, petrolCharge),
+      serviceCharge = COALESCE(?, serviceCharge)
     WHERE id = ?
   `;
 
@@ -292,6 +310,9 @@ app.put('/api/trips/:id', (req, res) => {
     trip.extraKm,
     trip.extraKmRate,
     trip.extraKmCharge,
+    trip.cngCharge,
+    trip.petrolCharge,
+    trip.serviceCharge,
     id
   ];
 

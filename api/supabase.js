@@ -48,6 +48,9 @@ function normalizeTrip(row) {
     extraKm: parseFloat(row.extrakm ?? row.extraKm ?? 0),
     extraKmRate: parseFloat(row.extrakmrate ?? row.extraKmRate ?? 11),
     extraKmCharge: parseFloat(row.extrakmcharge ?? row.extraKmCharge ?? 0),
+    cngCharge: parseFloat(row.cngcharge ?? row.cngCharge ?? 0),
+    petrolCharge: parseFloat(row.petrolcharge ?? row.petrolCharge ?? 0),
+    serviceCharge: parseFloat(row.servicecharge ?? row.serviceCharge ?? 0),
     created_at: row.created_at
   };
 }
@@ -78,7 +81,10 @@ function tripToDb(trip) {
     parkingcharge: parseFloat(trip.parkingCharge ?? trip.parkingcharge ?? 0),
     extrakm: parseFloat(trip.extraKm ?? trip.extrakm ?? 0),
     extrakmrate: parseFloat(trip.extraKmRate ?? trip.extrakmrate ?? 11),
-    extrakmcharge: parseFloat(trip.extraKmCharge ?? trip.extrakmcharge ?? 0)
+    extrakmcharge: parseFloat(trip.extraKmCharge ?? trip.extrakmcharge ?? 0),
+    cngcharge: parseFloat(trip.cngCharge ?? trip.cngcharge ?? 0),
+    petrolcharge: parseFloat(trip.petrolCharge ?? trip.petrolcharge ?? 0),
+    servicecharge: parseFloat(trip.serviceCharge ?? trip.servicecharge ?? 0)
   };
 }
 

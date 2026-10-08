@@ -294,14 +294,27 @@ class TravelsApp {
   // ─── EXTRA CHARGES ACCORDION & CALCULATOR ENGINE ───
   toggleExtraSection(prefix, addonType, forceState = null) {
     // prefix is 'start' or 'edit'
-    // addonType is 'waiting', 'parking', 'extraKm'
-    const boxId = prefix === 'start'
-      ? (addonType === 'waiting' ? 'startExtraWaitingBox' : (addonType === 'parking' ? 'startExtraParkingBox' : 'startExtraKmBox'))
-      : (addonType === 'waiting' ? 'editExtraWaitingBox' : (addonType === 'parking' ? 'editExtraParkingBox' : 'editExtraKmBox'));
+    // addonType is 'waiting', 'parking', 'extraKm', 'cng', 'petrol', 'service'
+    const boxMap = {
+      waiting: prefix === 'start' ? 'startExtraWaitingBox' : 'editExtraWaitingBox',
+      parking: prefix === 'start' ? 'startExtraParkingBox' : 'editExtraParkingBox',
+      extraKm: prefix === 'start' ? 'startExtraKmBox' : 'editExtraKmBox',
+      cng: prefix === 'start' ? 'startExtraCngBox' : 'editExtraCngBox',
+      petrol: prefix === 'start' ? 'startExtraPetrolBox' : 'editExtraPetrolBox',
+      service: prefix === 'start' ? 'startExtraServiceBox' : 'editExtraServiceBox'
+    };
 
-    const btnId = prefix === 'start'
-      ? (addonType === 'waiting' ? 'startToggleWaitingBtn' : (addonType === 'parking' ? 'startToggleParkingBtn' : 'startToggleExtraKmBtn'))
-      : (addonType === 'waiting' ? 'editToggleWaitingBtn' : (addonType === 'parking' ? 'editToggleParkingBtn' : 'editToggleExtraKmBtn'));
+    const btnMap = {
+      waiting: prefix === 'start' ? 'startToggleWaitingBtn' : 'editToggleWaitingBtn',
+      parking: prefix === 'start' ? 'startToggleParkingBtn' : 'editToggleParkingBtn',
+      extraKm: prefix === 'start' ? 'startToggleExtraKmBtn' : 'editToggleExtraKmBtn',
+      cng: prefix === 'start' ? 'startToggleCngBtn' : 'editToggleCngBtn',
+      petrol: prefix === 'start' ? 'startTogglePetrolBtn' : 'editTogglePetrolBtn',
+      service: prefix === 'start' ? 'startToggleServiceBtn' : 'editToggleServiceBtn'
+    };
+
+    const boxId = boxMap[addonType];
+    const btnId = btnMap[addonType];
 
     const box = document.getElementById(boxId);
     const btn = document.getElementById(btnId);
@@ -335,6 +348,15 @@ class TravelsApp {
         const chargeEl = document.getElementById(prefix === 'start' ? 'startExtraKmCharge' : 'editExtraKmCharge');
         if (kmEl) kmEl.value = '';
         if (chargeEl) chargeEl.value = '0';
+      } else if (addonType === 'cng') {
+        const cngEl = document.getElementById(prefix === 'start' ? 'startCngCharge' : 'editCngCharge');
+        if (cngEl) cngEl.value = '0';
+      } else if (addonType === 'petrol') {
+        const petEl = document.getElementById(prefix === 'start' ? 'startPetrolCharge' : 'editPetrolCharge');
+        if (petEl) petEl.value = '0';
+      } else if (addonType === 'service') {
+        const srvEl = document.getElementById(prefix === 'start' ? 'startServiceCharge' : 'editServiceCharge');
+        if (srvEl) srvEl.value = '0';
       }
     }
 
@@ -405,8 +427,11 @@ class TravelsApp {
     const waitingVal = parseFloat(document.getElementById(prefix === 'start' ? 'startWaitingCharge' : 'editWaitingCharge')?.value) || 0;
     const parkingVal = parseFloat(document.getElementById(prefix === 'start' ? 'startParkingCharge' : 'editParkingCharge')?.value) || 0;
     const extraKmVal = parseFloat(document.getElementById(prefix === 'start' ? 'startExtraKmCharge' : 'editExtraKmCharge')?.value) || 0;
+    const cngVal = parseFloat(document.getElementById(prefix === 'start' ? 'startCngCharge' : 'editCngCharge')?.value) || 0;
+    const petrolVal = parseFloat(document.getElementById(prefix === 'start' ? 'startPetrolCharge' : 'editPetrolCharge')?.value) || 0;
+    const serviceVal = parseFloat(document.getElementById(prefix === 'start' ? 'startServiceCharge' : 'editServiceCharge')?.value) || 0;
 
-    const subtotal = waitingVal + parkingVal + extraKmVal;
+    const subtotal = waitingVal + parkingVal + extraKmVal + cngVal + petrolVal + serviceVal;
 
     if (prefix === 'start') {
       const badge = document.getElementById('startExtrasTotalBadge');
@@ -569,6 +594,9 @@ class TravelsApp {
         const extraKm = parseFloat(formData.get('extraKm')) || 0;
         const extraKmRate = parseFloat(formData.get('extraKmRate')) || 11;
         const extraKmCharge = parseFloat(formData.get('extraKmCharge')) || 0;
+        const cngCharge = parseFloat(formData.get('cngCharge')) || 0;
+        const petrolCharge = parseFloat(formData.get('petrolCharge')) || 0;
+        const serviceCharge = parseFloat(formData.get('serviceCharge')) || 0;
 
         const newTrip = {
           id: `TRP-${Math.floor(100 + Math.random() * 900)}`,
@@ -594,7 +622,10 @@ class TravelsApp {
           parkingCharge: parkingCharge,
           extraKm: extraKm,
           extraKmRate: extraKmRate,
-          extraKmCharge: extraKmCharge
+          extraKmCharge: extraKmCharge,
+          cngCharge: cngCharge,
+          petrolCharge: petrolCharge,
+          serviceCharge: serviceCharge
         };
 
         // Add locally
@@ -745,6 +776,9 @@ class TravelsApp {
         trip.extraKm = parseFloat(formData.get('extraKm')) || 0;
         trip.extraKmRate = parseFloat(formData.get('extraKmRate')) || 11;
         trip.extraKmCharge = parseFloat(formData.get('extraKmCharge')) || 0;
+        trip.cngCharge = parseFloat(formData.get('cngCharge')) || 0;
+        trip.petrolCharge = parseFloat(formData.get('petrolCharge')) || 0;
+        trip.serviceCharge = parseFloat(formData.get('serviceCharge')) || 0;
 
         this.saveLocalData();
 
@@ -860,6 +894,9 @@ class TravelsApp {
     const hasWaiting = (parseFloat(trip.waitingCharge) > 0 || parseFloat(trip.waitingDuration) > 0);
     const hasParking = (parseFloat(trip.parkingCharge) > 0);
     const hasExtraKm = (parseFloat(trip.extraKm) > 0 || parseFloat(trip.extraKmCharge) > 0);
+    const hasCng = (parseFloat(trip.cngCharge) > 0);
+    const hasPetrol = (parseFloat(trip.petrolCharge) > 0);
+    const hasService = (parseFloat(trip.serviceCharge) > 0);
 
     const editWaitingUnit = document.getElementById('editWaitingUnit');
     if (editWaitingUnit) editWaitingUnit.value = trip.waitingUnit || 'hours';
@@ -885,9 +922,21 @@ class TravelsApp {
     const editExtraKmCharge = document.getElementById('editExtraKmCharge');
     if (editExtraKmCharge) editExtraKmCharge.value = trip.extraKmCharge ?? 0;
 
+    const editCngCharge = document.getElementById('editCngCharge');
+    if (editCngCharge) editCngCharge.value = trip.cngCharge ?? 0;
+
+    const editPetrolCharge = document.getElementById('editPetrolCharge');
+    if (editPetrolCharge) editPetrolCharge.value = trip.petrolCharge ?? 0;
+
+    const editServiceCharge = document.getElementById('editServiceCharge');
+    if (editServiceCharge) editServiceCharge.value = trip.serviceCharge ?? 0;
+
     this.toggleExtraSection('edit', 'waiting', hasWaiting);
     this.toggleExtraSection('edit', 'parking', hasParking);
     this.toggleExtraSection('edit', 'extraKm', hasExtraKm);
+    this.toggleExtraSection('edit', 'cng', hasCng);
+    this.toggleExtraSection('edit', 'petrol', hasPetrol);
+    this.toggleExtraSection('edit', 'service', hasService);
 
     this.calcEditLiveTally();
 
@@ -1128,7 +1177,10 @@ class TravelsApp {
       const waiting = parseFloat(t.waitingCharge || 0);
       const parking = parseFloat(t.parkingCharge || 0);
       const extraKm = parseFloat(t.extraKmCharge || 0);
-      const hasExtras = (waiting > 0 || parking > 0 || extraKm > 0);
+      const cng = parseFloat(t.cngCharge || 0);
+      const petrol = parseFloat(t.petrolCharge || 0);
+      const service = parseFloat(t.serviceCharge || 0);
+      const hasExtras = (waiting > 0 || parking > 0 || extraKm > 0 || cng > 0 || petrol > 0 || service > 0);
 
       return `
         <div class="trip-card">
@@ -1154,6 +1206,9 @@ class TravelsApp {
               ${waiting > 0 ? `<span class="extra-tag">⏳ Waiting: ₹${waiting.toFixed(2)} (${t.waitingDuration} ${t.waitingUnit || 'hrs'})</span>` : ''}
               ${parking > 0 ? `<span class="extra-tag">🅿️ Parking: ₹${parking.toFixed(2)}</span>` : ''}
               ${extraKm > 0 ? `<span class="extra-tag">🛣️ Extra KM: ₹${extraKm.toFixed(2)} (${t.extraKm} KM @ ₹${t.extraKmRate || 11})</span>` : ''}
+              ${cng > 0 ? `<span class="extra-tag">🔥 CNG: ₹${cng.toFixed(2)}</span>` : ''}
+              ${petrol > 0 ? `<span class="extra-tag">⛽ Petrol: ₹${petrol.toFixed(2)}</span>` : ''}
+              ${service > 0 ? `<span class="extra-tag">🔧 Service: ₹${service.toFixed(2)}</span>` : ''}
             </div>
           ` : ''}
 
@@ -1230,7 +1285,10 @@ class TravelsApp {
       const waiting = parseFloat(t.waitingCharge || 0);
       const parking = parseFloat(t.parkingCharge || 0);
       const extraKm = parseFloat(t.extraKmCharge || 0);
-      const hasExtras = (waiting > 0 || parking > 0 || extraKm > 0);
+      const cng = parseFloat(t.cngCharge || 0);
+      const petrol = parseFloat(t.petrolCharge || 0);
+      const service = parseFloat(t.serviceCharge || 0);
+      const hasExtras = (waiting > 0 || parking > 0 || extraKm > 0 || cng > 0 || petrol > 0 || service > 0);
 
       let mileageText = '';
       if (km > 0 && fuel > 0) {
@@ -1254,6 +1312,9 @@ class TravelsApp {
               ${waiting > 0 ? `<span class="extra-tag">⏳ Waiting: ₹${waiting.toFixed(2)}</span>` : ''}
               ${parking > 0 ? `<span class="extra-tag">🅿️ Parking: ₹${parking.toFixed(2)}</span>` : ''}
               ${extraKm > 0 ? `<span class="extra-tag">🛣️ Extra KM: ₹${extraKm.toFixed(2)} (${t.extraKm} KM)</span>` : ''}
+              ${cng > 0 ? `<span class="extra-tag">🔥 CNG: ₹${cng.toFixed(2)}</span>` : ''}
+              ${petrol > 0 ? `<span class="extra-tag">⛽ Petrol: ₹${petrol.toFixed(2)}</span>` : ''}
+              ${service > 0 ? `<span class="extra-tag">🔧 Service: ₹${service.toFixed(2)}</span>` : ''}
             </div>
           ` : ''}
 

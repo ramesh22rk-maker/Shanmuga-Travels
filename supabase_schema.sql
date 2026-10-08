@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS public.trips (
     extraKm NUMERIC(10, 2) DEFAULT 0,
     extraKmRate NUMERIC(10, 2) DEFAULT 11,
     extraKmCharge NUMERIC(10, 2) DEFAULT 0,
+    cngCharge NUMERIC(10, 2) DEFAULT 0,
+    petrolCharge NUMERIC(10, 2) DEFAULT 0,
+    serviceCharge NUMERIC(10, 2) DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 

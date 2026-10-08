@@ -26,6 +26,9 @@ function getFilteredReportData(trips, filterType, filterVal, searchQuery) {
   const totalWaiting = filtered.reduce((sum, t) => sum + parseFloat(t.waitingCharge || 0), 0);
   const totalParking = filtered.reduce((sum, t) => sum + parseFloat(t.parkingCharge || 0), 0);
   const totalExtraKmCharges = filtered.reduce((sum, t) => sum + parseFloat(t.extraKmCharge || 0), 0);
+  const totalCng = filtered.reduce((sum, t) => sum + parseFloat(t.cngCharge || 0), 0);
+  const totalPetrol = filtered.reduce((sum, t) => sum + parseFloat(t.petrolCharge || 0), 0);
+  const totalService = filtered.reduce((sum, t) => sum + parseFloat(t.serviceCharge || 0), 0);
   const totalKm = filtered.reduce((sum, t) => sum + parseFloat(t.distanceKm || 0), 0);
   const totalExpenses = totalFuel + totalTolls + totalOther;
   const netProfit = totalCostCustomers - totalExpenses;
@@ -39,6 +42,9 @@ function getFilteredReportData(trips, filterType, filterVal, searchQuery) {
     totalWaiting,
     totalParking,
     totalExtraKmCharges,
+    totalCng,
+    totalPetrol,
+    totalService,
     totalKm,
     totalExpenses,
     netProfit
@@ -60,7 +66,7 @@ function exportReportCSV(reportData, label = 'Shanmuga_Travels_Report') {
   csv += `NET PROFIT FOR US,₹${reportData.netProfit.toFixed(2)}\n\n`;
 
   csv += "TRIP LOG DETAILS\n";
-  csv += "Date,Time,Status,Customer Name,From Place,Destination,Start Odometer (KM),End Odometer (KM),KM Driven,Charged Amount (INR),Fuel Expense (INR),FASTag Toll (INR),Other Expense (INR),Waiting Charge (INR),Parking (INR),Extra KM Charge (INR),Net Profit (INR)\n";
+  csv += "Date,Time,Status,Customer Name,From Place,Destination,Start Odometer (KM),End Odometer (KM),KM Driven,Charged Amount (INR),Fuel Expense (INR),FASTag Toll (INR),Other Expense (INR),Waiting Charge (INR),Parking (INR),Extra KM Charge (INR),CNG Charge (INR),Petrol Charge (INR),Service Charge (INR),Net Profit (INR)\n";
 
   reportData.filteredTrips.forEach(t => {
     const rev = parseFloat(t.costCustomer || 0);
@@ -70,10 +76,13 @@ function exportReportCSV(reportData, label = 'Shanmuga_Travels_Report') {
     const waiting = parseFloat(t.waitingCharge || 0);
     const parking = parseFloat(t.parkingCharge || 0);
     const extraKm = parseFloat(t.extraKmCharge || 0);
+    const cng = parseFloat(t.cngCharge || 0);
+    const petrol = parseFloat(t.petrolCharge || 0);
+    const service = parseFloat(t.serviceCharge || 0);
     const exp = fuel + toll + other;
     const profit = rev - exp;
 
-    csv += `"${t.date}","${t.startTime}","${t.status}","${t.customerName || ''}","${t.fromPlace}","${t.toPlace}",${t.startOdo || 0},${t.endOdo || 0},${t.distanceKm || 0},${rev.toFixed(2)},${fuel.toFixed(2)},${toll.toFixed(2)},${other.toFixed(2)},${waiting.toFixed(2)},${parking.toFixed(2)},${extraKm.toFixed(2)},${profit.toFixed(2)}\n`;
+    csv += `"${t.date}","${t.startTime}","${t.status}","${t.customerName || ''}","${t.fromPlace}","${t.toPlace}",${t.startOdo || 0},${t.endOdo || 0},${t.distanceKm || 0},${rev.toFixed(2)},${fuel.toFixed(2)},${toll.toFixed(2)},${other.toFixed(2)},${waiting.toFixed(2)},${parking.toFixed(2)},${extraKm.toFixed(2)},${cng.toFixed(2)},${petrol.toFixed(2)},${service.toFixed(2)},${profit.toFixed(2)}\n`;
   });
 
   const encodedUri = encodeURI(csv);
